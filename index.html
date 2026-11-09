@@ -1,0 +1,938 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Interactive Jigsaw Puzzle Game</title>
+    <!-- Tailwind CSS for styling -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <!-- Font Awesome for crisp icons -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap');
+        
+        body {
+            font-family: 'Plus Jakarta Sans', sans-serif;
+            touch-action: manipulation;
+            user-select: none;
+            -webkit-user-select: none;
+        }
+
+        /* Custom scrollbars */
+        ::-webkit-scrollbar {
+            width: 8px;
+            height: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.6);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #475569;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #64748b;
+        }
+
+        /* Puzzle Piece Styling */
+        .puzzle-piece {
+            transition: transform 0.15s ease, box-shadow 0.15s ease;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2);
+            cursor: grab;
+            touch-action: none;
+        }
+
+        .puzzle-piece:active, .puzzle-piece.dragging {
+            cursor: grabbing;
+            transform: scale(1.05);
+            z-index: 50 !important;
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.4);
+        }
+
+        .puzzle-slot {
+            transition: background-color 0.2s ease, border-color 0.2s ease;
+        }
+
+        .puzzle-slot.highlight {
+            background-color: rgba(99, 102, 241, 0.3) !important;
+            border-color: #6366f1 !important;
+        }
+
+        /* Glassmorphism utility */
+        .glass-panel {
+            background: rgba(30, 41, 59, 0.75);
+            backdrop-filter: blur(12px);
+            -webkit-backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        /* Canvas preview effect */
+        .preview-active {
+            opacity: 0.35 !important;
+        }
+
+        /* Confetti overlay */
+        #confetti-canvas {
+            pointer-events: none;
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100vw;
+            height: 100vh;
+            z-index: 99;
+        }
+
+        /* Snap animation */
+        @keyframes snapBounce {
+            0% { transform: scale(0.95); }
+            50% { transform: scale(1.05); }
+            100% { transform: scale(1); }
+        }
+        .snap-anim {
+            animation: snapBounce 0.2s ease-out forwards;
+        }
+    </style>
+</head>
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col justify-between overflow-x-hidden antialiased">
+
+    <!-- Confetti Overlay Canvas -->
+    <canvas id="confetti-canvas"></canvas>
+
+    <!-- Header Section -->
+    <header class="w-full glass-panel border-b border-slate-800/80 sticky top-0 z-30 px-4 py-3 shadow-lg">
+        <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
+            <!-- Logo & Title -->
+            <div class="flex items-center gap-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-purple-500 flex items-center justify-center shadow-lg shadow-indigo-500/30">
+                    <i class="fa-solid font-bold text-xl fa-puzzle-piece text-white"></i>
+                </div>
+                <div>
+                    <h1 class="text-xl font-extrabold tracking-tight bg-gradient-to-r from-white via-slate-200 to-indigo-200 bg-clip-text text-transparent">
+                        PuzzleCraft
+                    </h1>
+                    <p class="text-xs text-slate-400 font-medium">Interactive Jigsaw Challenge</p>
+                </div>
+            </div>
+
+            <!-- Stats Header Widget -->
+            <div class="flex items-center gap-4 sm:gap-6 bg-slate-900/80 px-4 py-2 rounded-xl border border-slate-800 text-sm">
+                <div class="flex items-center gap-2">
+                    <i class="fa-regular fa-clock text-indigo-400"></i>
+                    <span class="text-slate-400 text-xs uppercase tracking-wider font-semibold">Time:</span>
+                    <span id="timer-display" class="font-mono font-bold text-slate-100 text-base">00:00</span>
+                </div>
+                <div class="h-4 w-px bg-slate-800"></div>
+                <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-arrows-spin text-purple-400"></i>
+                    <span class="text-slate-400 text-xs uppercase tracking-wider font-semibold">Moves:</span>
+                    <span id="moves-display" class="font-mono font-bold text-slate-100 text-base">0</span>
+                </div>
+                <div class="h-4 w-px bg-slate-800"></div>
+                <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-bullseye text-emerald-400"></i>
+                    <span class="text-slate-400 text-xs uppercase tracking-wider font-semibold">Placed:</span>
+                    <span id="progress-display" class="font-mono font-bold text-emerald-400 text-base">0/16</span>
+                </div>
+            </div>
+
+            <!-- Quick Action Control Buttons -->
+            <div class="flex items-center gap-2">
+                <button id="btn-sound" class="p-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-200 border border-slate-700 transition flex items-center justify-center" title="Toggle Sound">
+                    <i id="sound-icon" class="fa-solid fa-volume-high text-indigo-400"></i>
+                </button>
+                <button id="btn-peek" class="p-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-200 border border-slate-700 transition flex items-center justify-center" title="Hold to Preview Image">
+                    <i class="fa-solid fa-eye text-indigo-400"></i>
+                </button>
+                <button id="btn-restart" class="px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-semibold shadow-md shadow-indigo-600/20 transition flex items-center gap-2">
+                    <i class="fa-solid fa-rotate-right"></i>
+                    <span class="hidden sm:inline">Reset</span>
+                </button>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Game Container -->
+    <main class="max-w-7xl mx-auto w-full px-4 py-6 flex-grow flex flex-col gap-6">
+        
+        <!-- Controls & Customization Panel -->
+        <div class="glass-panel rounded-2xl p-4 shadow-xl flex flex-wrap items-center justify-between gap-4">
+            
+            <!-- Upload Photo Action & Status -->
+            <div class="flex flex-wrap items-center gap-3 w-full lg:w-auto">
+                <label class="cursor-pointer px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-sm shadow-md shadow-indigo-600/20 flex items-center gap-2 transition active:scale-95">
+                    <i class="fa-solid fa-cloud-arrow-up text-base"></i>
+                    <span>Upload Photo</span>
+                    <input type="file" id="image-upload" accept="image/*" class="hidden">
+                </label>
+                
+                <button id="btn-demo-pattern" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-indigo-300 border border-indigo-500/30 font-semibold text-xs transition flex items-center gap-1.5">
+                    <i class="fa-solid fa-wand-magic-sparkles"></i>
+                    <span>Demo Pattern</span>
+                </button>
+
+                <span id="upload-status-text" class="text-xs font-semibold text-slate-400 italic">
+                    No photo loaded yet
+                </span>
+            </div>
+
+            <div class="flex flex-wrap items-center gap-4 w-full lg:w-auto justify-between lg:justify-end">
+                <!-- Grid Size Difficulty Selector -->
+                <div class="flex items-center gap-2">
+                    <span class="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
+                        <i class="fa-solid fa-layer-group text-purple-400"></i> Grid:
+                    </span>
+                    <select id="grid-select" class="bg-slate-900 text-slate-200 border border-slate-700 rounded-lg px-3 py-1.5 text-xs font-semibold focus:outline-none focus:border-indigo-500 cursor-pointer">
+                        <option value="3">3 x 3 (Easy)</option>
+                        <option value="4" selected>4 x 4 (Medium)</option>
+                        <option value="5">5 x 5 (Hard)</option>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <!-- Main Workspace Grid: Board + Tray -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start flex-grow">
+            
+            <!-- Target Puzzle Board -->
+            <div class="lg:col-span-7 flex flex-col items-center justify-center">
+                <div class="relative w-full max-w-[500px] aspect-square rounded-2xl p-2 bg-slate-900 border-2 border-slate-800 shadow-2xl overflow-hidden flex items-center justify-center">
+                    
+                    <!-- Preview Image Overlay -->
+                    <div id="board-preview" class="absolute inset-2 rounded-xl bg-cover bg-center pointer-events-none opacity-0 transition-opacity duration-300 z-0"></div>
+                    
+                    <!-- Initial Placeholder Prompt -->
+                    <div id="placeholder-prompt" class="absolute inset-0 z-20 flex flex-col items-center justify-center p-6 text-center bg-slate-900/95 rounded-xl border-2 border-dashed border-slate-800">
+                        <div class="w-16 h-16 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 mb-3 animate-pulse">
+                            <i class="fa-solid fa-image text-3xl"></i>
+                        </div>
+                        <h3 class="text-lg font-bold text-slate-200 mb-1">Upload a Photo to Play</h3>
+                        <p class="text-xs text-slate-400 max-w-xs mb-4">Choose any picture from your device or load a demo pattern puzzle!</p>
+                        
+                        <div class="flex items-center gap-3">
+                            <label class="cursor-pointer px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition shadow-md shadow-indigo-600/30">
+                                Select File
+                                <input type="file" id="image-upload-prompt" accept="image/*" class="hidden">
+                            </label>
+                            <button id="btn-demo-prompt" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-indigo-300 border border-slate-700 text-xs font-semibold transition">
+                                Load Demo
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- Dynamic Grid Slot Container -->
+                    <div id="puzzle-board" class="relative z-10 w-full h-full grid gap-1 rounded-xl">
+                        <!-- Slots programmatically injected -->
+                    </div>
+                </div>
+                <p class="text-xs text-slate-400 mt-2 flex items-center gap-1.5">
+                    <i class="fa-solid fa-circle-info text-indigo-400"></i>
+                    Drag pieces from the tray and snap them into their matching grid slots.
+                </p>
+            </div>
+
+            <!-- Piece Storage Tray -->
+            <div class="lg:col-span-5 flex flex-col h-full">
+                <div class="glass-panel rounded-2xl p-4 flex flex-col flex-grow min-h-[350px] lg:min-h-[500px] max-h-[520px]">
+                    <div class="flex items-center justify-between pb-3 border-b border-slate-800 mb-3">
+                        <h2 class="text-sm font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
+                            <i class="fa-solid fa-shapes text-indigo-400"></i> Unplaced Pieces
+                        </h2>
+                        <button id="btn-shuffle" class="text-xs font-semibold text-indigo-400 hover:text-indigo-300 flex items-center gap-1 transition">
+                            <i class="fa-solid fa-shuffle"></i> Reshuffle
+                        </button>
+                    </div>
+
+                    <!-- Scrollable Tray Area -->
+                    <div id="pieces-tray" class="flex-grow overflow-y-auto p-2 border border-dashed border-slate-800 rounded-xl bg-slate-950/50 flex flex-wrap gap-3 items-center justify-center align-content-start">
+                        <!-- Shuffled unplaced pieces injected here -->
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <!-- Footer -->
+    <footer class="w-full py-3 border-t border-slate-900 text-center text-xs text-slate-400">
+        <p>© 2026 PuzzleCraft Jigsaw Game — Canvas Image Slicing Engine</p>
+    </footer>
+
+    <!-- Victory Modal -->
+    <div id="victory-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4 opacity-0 pointer-events-none transition-opacity duration-300">
+        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8 max-w-md w-full shadow-2xl text-center transform scale-95 transition-transform duration-300" id="victory-card">
+            <div class="w-16 h-16 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center mx-auto mb-4 shadow-lg shadow-emerald-500/30 animate-bounce">
+                <i class="fa-solid fa-trophy text-2xl text-slate-950"></i>
+            </div>
+            
+            <h2 class="text-2xl font-black text-white mb-1">Puzzle Solved!</h2>
+            <p class="text-slate-400 text-sm mb-6">Fantastic job! You've successfully reconstructed your photo.</p>
+            
+            <div class="grid grid-cols-2 gap-3 mb-6 bg-slate-950/60 p-3 rounded-xl border border-slate-800">
+                <div class="p-2">
+                    <span class="block text-xs font-semibold text-slate-400 uppercase">Total Time</span>
+                    <span id="final-time" class="text-xl font-bold font-mono text-emerald-400">00:00</span>
+                </div>
+                <div class="p-2 border-l border-slate-800">
+                    <span class="block text-xs font-semibold text-slate-400 uppercase">Total Moves</span>
+                    <span id="final-moves" class="text-xl font-bold font-mono text-purple-400">0</span>
+                </div>
+            </div>
+
+            <div class="flex flex-col gap-2">
+                <button id="btn-play-again" class="w-full py-3 rounded-xl bg-gradient-to-r from-indigo-600 via-indigo-500 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold shadow-lg shadow-indigo-600/30 transition">
+                    Play Again
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- JavaScript Application Logic -->
+    <script>
+        /**
+         * Web Audio Synthesizer (No external audio files needed)
+         */
+        class SoundEngine {
+            constructor() {
+                this.ctx = null;
+                this.enabled = true;
+            }
+
+            init() {
+                if (!this.ctx) {
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    if (AudioContext) this.ctx = new AudioContext();
+                }
+            }
+
+            playSnap() {
+                if (!this.enabled) return;
+                this.init();
+                if (!this.ctx) return;
+
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+
+                osc.type = 'sine';
+                osc.frequency.setValueAtTime(440, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(880, this.ctx.currentTime + 0.08);
+
+                gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.08);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.08);
+            }
+
+            playError() {
+                if (!this.enabled) return;
+                this.init();
+                if (!this.ctx) return;
+
+                const osc = this.ctx.createOscillator();
+                const gain = this.ctx.createGain();
+
+                osc.type = 'sawtooth';
+                osc.frequency.setValueAtTime(180, this.ctx.currentTime);
+                osc.frequency.linearRampToValueAtTime(110, this.ctx.currentTime + 0.15);
+
+                gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
+                gain.gain.linearRampToValueAtTime(0.01, this.ctx.currentTime + 0.15);
+
+                osc.connect(gain);
+                gain.connect(this.ctx.destination);
+
+                osc.start();
+                osc.stop(this.ctx.currentTime + 0.15);
+            }
+
+            playVictory() {
+                if (!this.enabled) return;
+                this.init();
+                if (!this.ctx) return;
+
+                const notes = [261.63, 329.63, 392.00, 523.25, 659.25, 783.99];
+                notes.forEach((freq, idx) => {
+                    const osc = this.ctx.createOscillator();
+                    const gain = this.ctx.createGain();
+
+                    osc.type = 'triangle';
+                    osc.frequency.setValueAtTime(freq, this.ctx.currentTime + idx * 0.09);
+
+                    gain.gain.setValueAtTime(0.25, this.ctx.currentTime + idx * 0.09);
+                    gain.gain.exponentialRampToValueAtTime(0.001, this.ctx.currentTime + idx * 0.09 + 0.35);
+
+                    osc.connect(gain);
+                    gain.connect(this.ctx.destination);
+
+                    osc.start(this.ctx.currentTime + idx * 0.09);
+                    osc.stop(this.ctx.currentTime + idx * 0.09 + 0.35);
+                });
+            }
+        }
+
+        /**
+         * Confetti Celebration Engine
+         */
+        class ConfettiEngine {
+            constructor(canvasId) {
+                this.canvas = document.getElementById(canvasId);
+                this.ctx = this.canvas.getContext('2d');
+                this.particles = [];
+                this.animating = false;
+                this.resize();
+                window.addEventListener('resize', () => this.resize());
+            }
+
+            resize() {
+                this.canvas.width = window.innerWidth;
+                this.canvas.height = window.innerHeight;
+            }
+
+            start() {
+                this.particles = [];
+                const colors = ['#6366f1', '#a855f7', '#ec4899', '#10b981', '#f59e0b', '#3b82f6'];
+                for (let i = 0; i < 120; i++) {
+                    this.particles.push({
+                        x: window.innerWidth / 2,
+                        y: window.innerHeight / 2,
+                        vx: (Math.random() - 0.5) * 18,
+                        vy: (Math.random() - 0.7) * 18,
+                        size: Math.random() * 8 + 4,
+                        color: colors[Math.floor(Math.random() * colors.length)],
+                        gravity: 0.35,
+                        friction: 0.96,
+                        rotation: Math.random() * Math.PI * 2,
+                        rotSpeed: (Math.random() - 0.5) * 0.2
+                    });
+                }
+                if (!this.animating) {
+                    this.animating = true;
+                    this.loop();
+                }
+            }
+
+            loop() {
+                if (!this.animating) return;
+                this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+
+                let alive = false;
+                this.particles.forEach(p => {
+                    p.vx *= p.friction;
+                    p.vy *= p.friction;
+                    p.vy += p.gravity;
+                    p.x += p.vx;
+                    p.y += p.vy;
+                    p.rotation += p.rotSpeed;
+
+                    if (p.y < this.canvas.height) alive = true;
+
+                    this.ctx.save();
+                    this.ctx.translate(p.x, p.y);
+                    this.ctx.rotate(p.rotation);
+                    this.ctx.fillStyle = p.color;
+                    this.ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
+                    this.ctx.restore();
+                });
+
+                if (alive) {
+                    requestAnimationFrame(() => this.loop());
+                } else {
+                    this.animating = false;
+                    this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
+                }
+            }
+        }
+
+        /**
+         * Main Jigsaw Game Application Logic
+         */
+        class JigsawGame {
+            constructor() {
+                this.gridSize = 4;
+                this.standardCanvasSize = 600; // Normalized master size for slicing
+                this.masterDataUrl = null;
+                this.masterImageObj = null;
+                this.pieces = [];
+                this.placedCount = 0;
+                this.totalPieces = 16;
+                this.moves = 0;
+                this.timerSeconds = 0;
+                this.timerInterval = null;
+                this.isGameActive = false;
+
+                this.sound = new SoundEngine();
+                this.confetti = new ConfettiEngine('confetti-canvas');
+
+                // Touch drag handlers
+                this.draggedPiece = null;
+                this.touchClone = null;
+                this.touchOffsetX = 0;
+                this.touchOffsetY = 0;
+
+                // Elements
+                this.boardEl = document.getElementById('puzzle-board');
+                this.boardPreviewEl = document.getElementById('board-preview');
+                this.placeholderPrompt = document.getElementById('placeholder-prompt');
+                this.trayEl = document.getElementById('pieces-tray');
+                this.timerEl = document.getElementById('timer-display');
+                this.movesEl = document.getElementById('moves-display');
+                this.progressEl = document.getElementById('progress-display');
+                this.gridSelect = document.getElementById('grid-select');
+                this.victoryModal = document.getElementById('victory-modal');
+                this.statusTextEl = document.getElementById('upload-status-text');
+
+                this.bindEvents();
+            }
+
+            bindEvents() {
+                // Grid difficulty change
+                this.gridSelect.addEventListener('change', (e) => {
+                    this.gridSize = parseInt(e.target.value);
+                    if (this.masterImageObj) {
+                        this.initGame();
+                    }
+                });
+
+                // File Upload Listeners
+                const handleUpload = (file) => {
+                    if (!file) return;
+
+                    if (!file.type.startsWith('image/')) {
+                        alert('Please select a valid image file.');
+                        return;
+                    }
+
+                    const reader = new FileReader();
+                    reader.onload = (event) => {
+                        this.processImageSource(event.target.result, file.name);
+                    };
+                    reader.readAsDataURL(file);
+                };
+
+                document.getElementById('image-upload').addEventListener('change', (e) => handleUpload(e.target.files[0]));
+                document.getElementById('image-upload-prompt').addEventListener('change', (e) => handleUpload(e.target.files[0]));
+
+                // Demo Pattern Generators
+                document.getElementById('btn-demo-pattern').addEventListener('click', () => this.generateDemoPattern());
+                document.getElementById('btn-demo-prompt').addEventListener('click', () => this.generateDemoPattern());
+
+                // Control Buttons
+                document.getElementById('btn-restart').addEventListener('click', () => {
+                    if (this.masterImageObj) this.initGame();
+                });
+                document.getElementById('btn-shuffle').addEventListener('click', () => {
+                    if (this.masterImageObj) this.shuffleTrayPieces();
+                });
+                
+                // Sound Toggle
+                document.getElementById('btn-sound').addEventListener('click', () => {
+                    this.sound.enabled = !this.sound.enabled;
+                    const icon = document.getElementById('sound-icon');
+                    icon.className = this.sound.enabled ? 'fa-solid fa-volume-high text-indigo-400' : 'fa-solid fa-volume-xmark text-slate-500';
+                });
+
+                // Peek preview listener
+                const peekBtn = document.getElementById('btn-peek');
+                const showPeek = () => { if (this.masterDataUrl) this.boardPreviewEl.classList.add('preview-active'); };
+                const hidePeek = () => this.boardPreviewEl.classList.remove('preview-active');
+                
+                peekBtn.addEventListener('mousedown', showPeek);
+                peekBtn.addEventListener('mouseup', hidePeek);
+                peekBtn.addEventListener('mouseleave', hidePeek);
+                peekBtn.addEventListener('touchstart', (e) => { e.preventDefault(); showPeek(); });
+                peekBtn.addEventListener('touchend', hidePeek);
+
+                // Play Again
+                document.getElementById('btn-play-again').addEventListener('click', () => {
+                    this.hideVictoryModal();
+                    this.initGame();
+                });
+            }
+
+            /**
+             * Generates a colorful abstract pattern canvas as fallback
+             */
+            generateDemoPattern() {
+                const canvas = document.createElement('canvas');
+                canvas.width = this.standardCanvasSize;
+                canvas.height = this.standardCanvasSize;
+                const ctx = canvas.getContext('2d');
+
+                // Gradient background
+                const grad = ctx.createLinearGradient(0, 0, 600, 600);
+                grad.addColorStop(0, '#4f46e5');
+                grad.addColorStop(0.5, '#9333ea');
+                grad.addColorStop(1, '#06b6d4');
+                ctx.fillStyle = grad;
+                ctx.fillRect(0, 0, 600, 600);
+
+                // Geometric circles and grid design
+                const colors = ['#f43f5e', '#fbbf24', '#10b981', '#3b82f6', '#ec4899'];
+                for (let i = 0; i < 25; i++) {
+                    ctx.beginPath();
+                    const x = (i % 5) * 120 + 60;
+                    const y = Math.floor(i / 5) * 120 + 60;
+                    const r = 40 + (i % 3) * 10;
+                    ctx.arc(x, y, r, 0, Math.PI * 2);
+                    ctx.fillStyle = colors[i % colors.length];
+                    ctx.globalAlpha = 0.85;
+                    ctx.fill();
+                    ctx.lineWidth = 4;
+                    ctx.strokeStyle = '#ffffff';
+                    ctx.stroke();
+                }
+
+                ctx.globalAlpha = 1.0;
+                ctx.font = '900 42px sans-serif';
+                ctx.fillStyle = '#ffffff';
+                ctx.textAlign = 'center';
+                ctx.fillText('PUZZLE CRAFT', 300, 315);
+
+                const dataUrl = canvas.toDataURL('image/png');
+                this.processImageSource(dataUrl, 'Demo Pattern');
+            }
+
+            /**
+             * Loads and resizes image to master offscreen canvas to standardize grid resolution
+             */
+            processImageSource(src, titleName) {
+                const img = new Image();
+                img.crossOrigin = 'anonymous';
+                
+                img.onload = () => {
+                    const canvas = document.createElement('canvas');
+                    canvas.width = this.standardCanvasSize;
+                    canvas.height = this.standardCanvasSize;
+                    const ctx = canvas.getContext('2d');
+
+                    // Draw image scaled to square 600x600 canvas
+                    ctx.drawImage(img, 0, 0, this.standardCanvasSize, this.standardCanvasSize);
+
+                    this.masterDataUrl = canvas.toDataURL('image/png');
+                    
+                    // Preload standardized master image object
+                    const masterImg = new Image();
+                    masterImg.onload = () => {
+                        this.masterImageObj = masterImg;
+                        this.statusTextEl.textContent = `Loaded: ${titleName.length > 16 ? titleName.substring(0, 14) + '...' : titleName}`;
+                        this.statusTextEl.className = 'text-xs font-semibold text-emerald-400 truncate max-w-[150px]';
+                        this.initGame();
+                    };
+                    masterImg.src = this.masterDataUrl;
+                };
+
+                img.onerror = () => {
+                    alert('Error loading image. Using fallback demo pattern.');
+                    this.generateDemoPattern();
+                };
+
+                img.src = src;
+            }
+
+            startTimer() {
+                this.stopTimer();
+                this.timerSeconds = 0;
+                this.timerEl.textContent = '00:00';
+                this.timerInterval = setInterval(() => {
+                    this.timerSeconds++;
+                    const mins = String(Math.floor(this.timerSeconds / 60)).padStart(2, '0');
+                    const secs = String(this.timerSeconds % 60).padStart(2, '0');
+                    this.timerEl.textContent = `${mins}:${secs}`;
+                }, 1000);
+            }
+
+            stopTimer() {
+                if (this.timerInterval) {
+                    clearInterval(this.timerInterval);
+                    this.timerInterval = null;
+                }
+            }
+
+            initGame() {
+                if (!this.masterImageObj) return;
+
+                // Hide placeholder prompt
+                this.placeholderPrompt.classList.add('hidden');
+
+                this.stopTimer();
+                this.moves = 0;
+                this.placedCount = 0;
+                this.totalPieces = this.gridSize * this.gridSize;
+                
+                this.movesEl.textContent = '0';
+                this.progressEl.textContent = `0/${this.totalPieces}`;
+
+                // Set board preview background
+                this.boardPreviewEl.style.backgroundImage = `url("${this.masterDataUrl}")`;
+
+                // Configure CSS grid dynamically
+                this.boardEl.style.gridTemplateColumns = `repeat(${this.gridSize}, 1fr)`;
+                this.boardEl.style.gridTemplateRows = `repeat(${this.gridSize}, 1fr)`;
+
+                this.renderBoardSlots();
+                this.sliceImageAndCreatePieces();
+                this.startTimer();
+                this.isGameActive = true;
+            }
+
+            renderBoardSlots() {
+                this.boardEl.innerHTML = '';
+                for (let index = 0; index < this.totalPieces; index++) {
+                    const slot = document.createElement('div');
+                    slot.className = 'puzzle-slot w-full h-full bg-slate-950/60 border border-slate-800/80 rounded-lg flex items-center justify-center relative overflow-hidden';
+                    slot.dataset.index = index;
+
+                    // Slot HTML5 Drag & Drop Listeners
+                    slot.addEventListener('dragover', (e) => {
+                        e.preventDefault();
+                        if (!slot.hasChildNodes()) {
+                            slot.classList.add('highlight');
+                        }
+                    });
+
+                    slot.addEventListener('dragleave', () => {
+                        slot.classList.remove('highlight');
+                    });
+
+                    slot.addEventListener('drop', (e) => {
+                        e.preventDefault();
+                        slot.classList.remove('highlight');
+                        const pieceIndex = e.dataTransfer.getData('text/plain');
+                        const piece = document.getElementById(`piece-${pieceIndex}`);
+                        if (piece) {
+                            this.attemptPlacePiece(piece, slot);
+                        }
+                    });
+
+                    this.boardEl.appendChild(slot);
+                }
+            }
+
+            /**
+             * Slices the master canvas image into distinct piece PNG images
+             */
+            sliceImageAndCreatePieces() {
+                this.pieces = [];
+                this.trayEl.innerHTML = '';
+
+                const tileSize = this.standardCanvasSize / this.gridSize;
+                const canvas = document.createElement('canvas');
+                canvas.width = tileSize;
+                canvas.height = tileSize;
+                const ctx = canvas.getContext('2d');
+
+                for (let index = 0; index < this.totalPieces; index++) {
+                    const row = Math.floor(index / this.gridSize);
+                    const col = index % this.gridSize;
+
+                    // Clear canvas slice
+                    ctx.clearRect(0, 0, tileSize, tileSize);
+                    
+                    // Draw slice from master image
+                    ctx.drawImage(
+                        this.masterImageObj,
+                        col * tileSize,
+                        row * tileSize,
+                        tileSize,
+                        tileSize,
+                        0,
+                        0,
+                        tileSize,
+                        tileSize
+                    );
+
+                    const dataUrl = canvas.toDataURL('image/png');
+
+                    // Create element for piece using <img> tag
+                    const piece = document.createElement('div');
+                    piece.id = `piece-${index}`;
+                    piece.className = 'puzzle-piece rounded-lg border border-slate-700/60 bg-slate-900 overflow-hidden select-none flex items-center justify-center';
+                    piece.dataset.index = index;
+                    piece.draggable = true;
+
+                    const imgTag = document.createElement('img');
+                    imgTag.src = dataUrl;
+                    imgTag.className = 'w-full h-full object-cover pointer-events-none';
+                    imgTag.alt = `Piece ${index + 1}`;
+                    piece.appendChild(imgTag);
+
+                    // Dragstart listener
+                    piece.addEventListener('dragstart', (e) => {
+                        e.dataTransfer.setData('text/plain', index);
+                        piece.classList.add('dragging');
+                    });
+
+                    piece.addEventListener('dragend', () => {
+                        piece.classList.remove('dragging');
+                    });
+
+                    // Touch events for mobile
+                    this.attachTouchEvents(piece);
+
+                    this.pieces.push(piece);
+                }
+
+                this.shuffleTrayPieces();
+            }
+
+            shuffleTrayPieces() {
+                const unplaced = this.pieces.filter(p => p.parentElement === null || !p.parentElement.classList.contains('puzzle-slot'));
+                
+                // Fisher-Yates shuffle
+                for (let i = unplaced.length - 1; i > 0; i--) {
+                    const j = Math.floor(Math.random() * (i + 1));
+                    [unplaced[i], unplaced[j]] = [unplaced[j], unplaced[i]];
+                }
+
+                this.trayEl.innerHTML = '';
+                const pieceDimension = Math.min(90, Math.floor(320 / this.gridSize));
+
+                unplaced.forEach(p => {
+                    p.style.width = `${pieceDimension}px`;
+                    p.style.height = `${pieceDimension}px`;
+                    this.trayEl.appendChild(p);
+                });
+            }
+
+            attachTouchEvents(piece) {
+                piece.addEventListener('touchstart', (e) => {
+                    if (piece.dataset.locked === 'true') return;
+                    
+                    const touch = e.touches[0];
+                    const rect = piece.getBoundingClientRect();
+                    
+                    this.touchOffsetX = touch.clientX - rect.left;
+                    this.touchOffsetY = touch.clientY - rect.top;
+                    this.draggedPiece = piece;
+
+                    // Floating clone preview on mobile
+                    this.touchClone = piece.cloneNode(true);
+                    this.touchClone.style.position = 'fixed';
+                    this.touchClone.style.width = `${rect.width}px`;
+                    this.touchClone.style.height = `${rect.height}px`;
+                    this.touchClone.style.left = `${touch.clientX - this.touchOffsetX}px`;
+                    this.touchClone.style.top = `${touch.clientY - this.touchOffsetY}px`;
+                    this.touchClone.style.zIndex = '1000';
+                    this.touchClone.style.pointerEvents = 'none';
+                    this.touchClone.style.opacity = '0.9';
+                    this.touchClone.style.transform = 'scale(1.08)';
+
+                    document.body.appendChild(this.touchClone);
+                    piece.style.opacity = '0.3';
+                }, { passive: false });
+
+                window.addEventListener('touchmove', (e) => {
+                    if (!this.touchClone || !this.draggedPiece) return;
+                    e.preventDefault();
+
+                    const touch = e.touches[0];
+                    this.touchClone.style.left = `${touch.clientX - this.touchOffsetX}px`;
+                    this.touchClone.style.top = `${touch.clientY - this.touchOffsetY}px`;
+
+                    const elementBelow = document.elementFromPoint(touch.clientX, touch.clientY);
+                    const slot = elementBelow ? elementBelow.closest('.puzzle-slot') : null;
+
+                    document.querySelectorAll('.puzzle-slot').forEach(s => s.classList.remove('highlight'));
+                    if (slot && !slot.hasChildNodes()) {
+                        slot.classList.add('highlight');
+                    }
+                }, { passive: false });
+
+                window.addEventListener('touchend', (e) => {
+                    if (!this.touchClone || !this.draggedPiece) return;
+
+                    const touch = e.changedTouches[0];
+                    const elementBelow = document.elementFromPoint(touch.clientX, touch.clientY);
+                    const slot = elementBelow ? elementBelow.closest('.puzzle-slot') : null;
+
+                    document.querySelectorAll('.puzzle-slot').forEach(s => s.classList.remove('highlight'));
+
+                    if (this.touchClone.parentNode) {
+                        this.touchClone.parentNode.removeChild(this.touchClone);
+                    }
+                    this.draggedPiece.style.opacity = '1';
+
+                    if (slot) {
+                        this.attemptPlacePiece(this.draggedPiece, slot);
+                    }
+
+                    this.draggedPiece = null;
+                    this.touchClone = null;
+                });
+            }
+
+            attemptPlacePiece(piece, slot) {
+                if (!this.isGameActive || slot.hasChildNodes()) return;
+
+                const pieceIdx = parseInt(piece.dataset.index);
+                const slotIdx = parseInt(slot.dataset.index);
+
+                this.moves++;
+                this.movesEl.textContent = this.moves;
+
+                if (pieceIdx === slotIdx) {
+                    // Correct Placement
+                    piece.style.width = '100%';
+                    piece.style.height = '100%';
+                    piece.style.borderRadius = '0.375rem';
+                    piece.draggable = false;
+                    piece.dataset.locked = 'true';
+                    piece.classList.remove('puzzle-piece');
+                    piece.classList.add('border-none', 'shadow-none', 'snap-anim');
+                    
+                    slot.appendChild(piece);
+                    this.sound.playSnap();
+                    
+                    this.placedCount++;
+                    this.progressEl.textContent = `${this.placedCount}/${this.totalPieces}`;
+
+                    if (this.placedCount === this.totalPieces) {
+                        this.handleVictory();
+                    }
+                } else {
+                    // Incorrect Placement
+                    this.sound.playError();
+                    slot.classList.add('bg-red-500/20');
+                    setTimeout(() => slot.classList.remove('bg-red-500/20'), 300);
+                }
+            }
+
+            handleVictory() {
+                this.stopTimer();
+                this.isGameActive = false;
+                
+                this.sound.playVictory();
+                this.confetti.start();
+
+                document.getElementById('final-time').textContent = this.timerEl.textContent;
+                document.getElementById('final-moves').textContent = this.moves;
+
+                setTimeout(() => {
+                    this.showVictoryModal();
+                }, 400);
+            }
+
+            showVictoryModal() {
+                this.victoryModal.classList.remove('opacity-0', 'pointer-events-none');
+                document.getElementById('victory-card').classList.remove('scale-95');
+                document.getElementById('victory-card').classList.add('scale-100');
+            }
+
+            hideVictoryModal() {
+                this.victoryModal.classList.add('opacity-0', 'pointer-events-none');
+                document.getElementById('victory-card').classList.remove('scale-100');
+                document.getElementById('victory-card').classList.add('scale-95');
+            }
+        }
+
+        // Initialize application on page load
+        window.addEventListener('DOMContentLoaded', () => {
+            const game = new JigsawGame();
+            // Automatically initialize with demo pattern so the user has an instant playable game
+            game.generateDemoPattern();
+        });
+    </script>
+</body>
+</html>
