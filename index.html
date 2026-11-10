@@ -830,7 +830,7 @@
                     this.touchOffsetX = touch.clientX - rect.left;
                     this.touchOffsetY = touch.clientY - rect.top;
 
-                    // Create floating drag clone
+                    // Create floating drag clone for mobile
                     this.touchClone = pieceEl.cloneNode(true);
                     this.touchClone.style.position = 'fixed';
                     this.touchClone.style.width = `${rect.width}px`;
@@ -838,8 +838,8 @@
                     this.touchClone.style.left = `${touch.clientX - this.touchOffsetX}px`;
                     this.touchClone.style.top = `${touch.clientY - this.touchOffsetY}px`;
                     this.touchClone.style.zIndex = '1000';
-                    this.touchClone.style.pointerEvents = 'none';
-                    this.touchClone.style.opacity = '0.9';
+                    this.touchClone.style.pointerEvents = 'none'; // Critical to allow elementFromPoint to see slots underneath
+                    this.touchClone.style.opacity = '0.85';
                     this.touchClone.classList.add('shadow-2xl');
 
                     document.body.appendChild(this.touchClone);
@@ -848,27 +848,34 @@
 
                 pieceEl.addEventListener('touchmove', (e) => {
                     if (!this.touchClone) return;
-                    e.preventDefault();
+                    if (e.cancelable) e.preventDefault(); // Prevent page scrolling during dragging
+                    
                     const touch = e.touches[0];
                     this.touchClone.style.left = `${touch.clientX - this.touchOffsetX}px`;
                     this.touchClone.style.top = `${touch.clientY - this.touchOffsetY}px`;
 
-                    // Highlight hovered slot
+                    // Highlight hovered slot accurately using elementFromPoint
                     const targetEl = document.elementFromPoint(touch.clientX, touch.clientY);
                     const slot = targetEl ? targetEl.closest('.puzzle-slot') : null;
                     document.querySelectorAll('.puzzle-slot').forEach(s => s.classList.remove('highlight'));
-                    if (slot && !slot.hasChildNodes()) {
+                    if (slot && slot.children.length === 0) {
                         slot.classList.add('highlight');
                     }
-                });
+                }, { passive: false });
 
-                pieceEl.addEventListener('touchend', (e) => {
+                const handleTouchEnd = (e) => {
                     if (!this.touchClone) return;
-                    const touch = e.changedTouches[0];
-                    const targetEl = document.elementFromPoint(touch.clientX, touch.clientY);
-                    const slot = targetEl ? targetEl.closest('.puzzle-slot') : null;
+                    
+                    const touch = e.changedTouches ? e.changedTouches[0] : null;
+                    let slot = null;
+                    
+                    if (touch) {
+                        const targetEl = document.elementFromPoint(touch.clientX, touch.clientY);
+                        slot = targetEl ? targetEl.closest('.puzzle-slot') : null;
+                    }
 
                     document.querySelectorAll('.puzzle-slot').forEach(s => s.classList.remove('highlight'));
+                    
                     if (this.touchClone) {
                         this.touchClone.remove();
                         this.touchClone = null;
@@ -878,7 +885,10 @@
                     if (slot) {
                         this.attemptPlacePiece(pieceEl, slot);
                     }
-                });
+                };
+
+                pieceEl.addEventListener('touchend', handleTouchEnd);
+                pieceEl.addEventListener('touchcancel', handleTouchEnd);
             }
 
             attemptPlacePiece(pieceEl, slotEl) {
