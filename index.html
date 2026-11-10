@@ -2,1062 +2,933 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Interactive Jigsaw Puzzle Game</title>
-    <!-- Tailwind CSS for styling -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>PuzzleCraft - Dynamic Jigsaw Game</title>
+    <!-- Tailwind CSS CDN -->
     <script src="https://cdn.tailwindcss.com"></script>
-    <!-- Font Awesome for crisp icons -->
+    <!-- FontAwesome Icons -->
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;600;700;800&display=swap');
+        /* Touch prevent default scrolling when dragging */
+        .touch-none {
+            touch-action: none !important;
+        }
         
-        body {
-            font-family: 'Plus Jakarta Sans', sans-serif;
-            touch-action: manipulation;
+        /* Glassmorphism utility styles */
+        .glass-panel {
+            background: rgba(15, 23, 42, 0.75);
+            backdrop-filter: blur(12px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+        }
+        .glass-button {
+            background: rgba(30, 41, 59, 0.8);
+            backdrop-filter: blur(8px);
+            border: 1px solid rgba(255, 255, 255, 0.15);
+            transition: all 0.2s ease;
+        }
+        .glass-button:hover {
+            background: rgba(51, 65, 85, 0.9);
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+
+        /* Responsive Grid Container Styling */
+        #puzzle-board {
+            display: grid;
+            gap: 2px;
+            background: rgba(15, 23, 42, 0.6);
+            border: 2px solid rgba(255, 255, 255, 0.15);
+            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.4);
             user-select: none;
             -webkit-user-select: none;
         }
 
-        /* Custom scrollbars */
-        ::-webkit-scrollbar {
-            width: 8px;
-            height: 8px;
+        /* Individual Slot */
+        .grid-slot {
+            position: relative;
+            background: rgba(30, 41, 59, 0.4);
+            border: 1px dashed rgba(255, 255, 255, 0.15);
+            transition: background-color 0.2s ease;
+            overflow: hidden;
         }
-        ::-webkit-scrollbar-track {
-            background: rgba(15, 23, 42, 0.6);
+
+        .grid-slot.drag-over {
+            background: rgba(99, 102, 241, 0.3);
+            border-color: #6366f1;
         }
-        ::-webkit-scrollbar-thumb {
-            background: #475569;
+
+        /* Puzzle Piece Base Styling */
+        .puzzle-piece {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            cursor: grab;
+            user-select: none;
+            -webkit-user-select: none;
+            -webkit-user-drag: none;
+            touch-action: none;
+            display: block;
+            border-radius: 2px;
+        }
+
+        .puzzle-piece:active {
+            cursor: grabbing;
+        }
+
+        /* Piece Tray styling */
+        .tray-piece-card {
+            aspect-ratio: 1 / 1;
+            background: rgba(30, 41, 59, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 0.5rem;
+            padding: 2px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: grab;
+            transition: transform 0.15s ease, border-color 0.15s ease;
+            touch-action: none;
+            user-select: none;
+        }
+
+        .tray-piece-card:hover {
+            transform: translateY(-2px);
+            border-color: rgba(99, 102, 241, 0.6);
+        }
+
+        /* Touch Dragging Shadow Clone */
+        .drag-clone {
+            position: fixed;
+            pointer-events: none;
+            z-index: 9999;
+            opacity: 0.9;
+            transform: scale(1.08) translate(-50%, -50%);
+            box-shadow: 0 15px 30px rgba(0,0,0,0.6), 0 0 15px rgba(99,102,241,0.5);
+            border: 2px solid #818cf8;
+            border-radius: 0.5rem;
+        }
+
+        /* Custom Scrollbar for Tray */
+        .custom-scrollbar::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-track {
+            background: rgba(15, 23, 42, 0.5);
             border-radius: 4px;
         }
-        ::-webkit-scrollbar-thumb:hover {
-            background: #64748b;
+        .custom-scrollbar::-webkit-scrollbar-thumb {
+            background: rgba(99, 102, 241, 0.5);
+            border-radius: 4px;
+        }
+        .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+            background: rgba(99, 102, 241, 0.8);
         }
 
-        /* Puzzle Piece Styling */
-        .puzzle-piece {
-            transition: transform 0.15s ease, box-shadow 0.15s ease;
-            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.3), 0 2px 4px -1px rgba(0, 0, 0, 0.2);
-            cursor: grab;
-            touch-action: none;
+        /* Pulsing Glow Animation */
+        @keyframes pulseGlow {
+            0%, 100% { box-shadow: 0 0 15px rgba(99, 102, 241, 0.3); }
+            50% { box-shadow: 0 0 25px rgba(99, 102, 241, 0.7); }
         }
-
-        .puzzle-piece:active, .puzzle-piece.dragging {
-            cursor: grabbing;
-            transform: scale(1.05);
-            z-index: 50 !important;
-            box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.5), 0 10px 10px -5px rgba(0, 0, 0, 0.4);
-        }
-
-        .puzzle-slot {
-            transition: background-color 0.2s ease, border-color 0.2s ease;
-        }
-
-        .puzzle-slot.highlight {
-            background-color: rgba(99, 102, 241, 0.3) !important;
-            border-color: #6366f1 !important;
-        }
-
-        /* Glassmorphism utility */
-        .glass-panel {
-            background: rgba(30, 41, 59, 0.75);
-            backdrop-filter: blur(12px);
-            -webkit-backdrop-filter: blur(12px);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-        }
-
-        /* Canvas preview effect */
-        .preview-active {
-            opacity: 0.35 !important;
-        }
-
-        /* Confetti overlay */
-        #confetti-canvas {
-            pointer-events: none;
-            position: fixed;
-            top: 0;
-            left: 0;
-            width: 100vw;
-            height: 100vh;
-            z-index: 99;
-        }
-
-        /* Snap animation */
-        @keyframes snapBounce {
-            0% { transform: scale(0.95); }
-            50% { transform: scale(1.05); }
-            100% { transform: scale(1); }
-        }
-        .snap-anim {
-            animation: snapBounce 0.2s ease-out forwards;
+        .pulse-glow {
+            animation: pulseGlow 2s infinite;
         }
     </style>
 </head>
-<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col justify-between overflow-x-hidden antialiased">
+<body class="bg-slate-950 text-slate-100 min-h-screen flex flex-col font-sans antialiased overflow-x-hidden selection:bg-indigo-500 selection:text-white">
 
-    <!-- Confetti Overlay Canvas -->
-    <canvas id="confetti-canvas"></canvas>
-
-    <!-- Header Section -->
-    <header class="w-full glass-panel border-b border-slate-800/80 sticky top-0 z-30 px-4 py-3 shadow-lg">
-        <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-4">
-            <!-- Logo & Title -->
-            <div class="flex items-center gap-3">
-                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 via-indigo-500 to-purple-500 flex items-center justify-center shadow-lg shadow-indigo-500/30">
-                    <i class="fa-solid font-bold text-xl fa-puzzle-piece text-white"></i>
+    <!-- Header Navigation & Controls -->
+    <header class="w-full glass-panel sticky top-0 z-40 border-b border-slate-800 px-4 py-3 shadow-lg">
+        <div class="max-w-7xl mx-auto flex flex-wrap items-center justify-between gap-3">
+            
+            <!-- Logo Brand -->
+            <div class="flex items-center space-x-3">
+                <div class="w-10 h-10 rounded-xl bg-gradient-to-tr from-indigo-600 to-violet-500 flex items-center justify-center shadow-lg shadow-indigo-500/30">
+                    <i class="fa-solid fa-puzzle-piece text-white text-xl"></i>
                 </div>
                 <div>
-                    <h1 class="text-xl font-extrabold tracking-tight bg-gradient-to-r from-white via-slate-200 to-indigo-200 bg-clip-text text-transparent">
-                        PuzzleCraft
-                    </h1>
-                    <p class="text-xs text-slate-400 font-medium">Interactive Jigsaw Challenge</p>
+                    <h1 class="font-bold text-lg leading-none tracking-tight text-white">PuzzleCraft</h1>
+                    <p class="text-xs text-slate-400 mt-1">Interactive Touch & Grid-Swap Jigsaw</p>
                 </div>
             </div>
 
-            <!-- Stats Header Widget -->
-            <div class="flex items-center gap-4 sm:gap-6 bg-slate-900/80 px-4 py-2 rounded-xl border border-slate-800 text-sm">
-                <div class="flex items-center gap-2">
-                    <i class="fa-regular fa-clock text-indigo-400"></i>
-                    <span id="timer-label" class="text-slate-400 text-xs uppercase tracking-wider font-semibold">Time:</span>
-                    <span id="timer-display" class="font-mono font-bold text-slate-100 text-base">03:00</span>
-                </div>
-                <div class="h-4 w-px bg-slate-800"></div>
-                <div class="flex items-center gap-2">
-                    <i class="fa-solid fa-arrows-spin text-purple-400"></i>
-                    <span class="text-slate-400 text-xs uppercase tracking-wider font-semibold">Moves:</span>
-                    <span id="moves-display" class="font-mono font-bold text-slate-100 text-base">0</span>
-                </div>
-                <div class="h-4 w-px bg-slate-800"></div>
-                <div class="flex items-center gap-2">
-                    <i class="fa-solid fa-bullseye text-emerald-400"></i>
-                    <span class="text-slate-400 text-xs uppercase tracking-wider font-semibold">Placed:</span>
-                    <span id="progress-display" class="font-mono font-bold text-emerald-400 text-base">0/16</span>
-                </div>
-            </div>
+            <!-- Header Controls & Compact Reference Image -->
+            <div class="flex flex-wrap items-center gap-2 sm:gap-4">
+                
+                <!-- Upload Button -->
+                <label class="cursor-pointer glass-button px-3 py-2 rounded-xl text-xs sm:text-sm font-semibold text-white flex items-center gap-2 shadow-sm hover:border-indigo-500 transition-all">
+                    <i class="fa-solid fa-cloud-arrow-up text-indigo-400"></i>
+                    <span>Upload Photo</span>
+                    <input type="file" id="image-upload" accept="image/*" class="hidden">
+                </label>
 
-            <!-- Quick Action Control Buttons -->
-            <div class="flex items-center gap-2">
-                <button id="btn-sound" class="p-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-200 border border-slate-700 transition flex items-center justify-center" title="Toggle Sound">
-                    <i id="sound-icon" class="fa-solid fa-volume-high text-indigo-400"></i>
-                </button>
-                <button id="btn-peek" class="p-2.5 rounded-xl bg-slate-800/80 hover:bg-slate-700 text-slate-200 border border-slate-700 transition flex items-center justify-center" title="Hold to Preview Image">
-                    <i class="fa-solid fa-eye text-indigo-400"></i>
-                </button>
-                <button id="btn-restart" class="px-4 py-2.5 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-semibold shadow-md shadow-indigo-600/20 transition flex items-center gap-2">
-                    <i class="fa-solid fa-rotate-right"></i>
-                    <span class="hidden sm:inline">Reset</span>
-                </button>
+                <!-- Compact Reference Thumbnail Box -->
+                <div id="reference-box" class="relative group hidden sm:flex items-center gap-2 glass-button px-2 py-1 rounded-xl">
+                    <span class="text-[10px] font-semibold text-slate-400 uppercase tracking-wider pl-1">Ref:</span>
+                    <img id="reference-img" src="" alt="Target Photo Reference" class="w-8 h-8 object-cover rounded-lg border border-indigo-400/40">
+                </div>
+
+                <!-- Grid & Timer Selection -->
+                <div class="flex items-center space-x-2 bg-slate-900/80 p-1.5 rounded-xl border border-slate-800">
+                    <i class="fa-solid fa-layer-group text-indigo-400 text-xs pl-1"></i>
+                    <select id="grid-size" class="bg-transparent text-xs font-semibold text-slate-200 outline-none cursor-pointer pr-1">
+                        <option value="3" class="bg-slate-900 text-slate-200">3x3 (2 Mins)</option>
+                        <option value="4" class="bg-slate-900 text-slate-200" selected>4x4 (4 Mins)</option>
+                        <option value="5" class="bg-slate-900 text-slate-200">5x5 (6 Mins)</option>
+                    </select>
+                </div>
+
+                <!-- Utility Action Buttons -->
+                <div class="flex items-center space-x-1 sm:space-x-2">
+                    <button id="btn-sound" title="Toggle Sound" class="glass-button p-2.5 rounded-xl text-slate-300 hover:text-white text-xs sm:text-sm">
+                        <i class="fa-solid fa-volume-high" id="sound-icon"></i>
+                    </button>
+                    <button id="btn-peek" title="Hold to Peek Full Image" class="glass-button p-2.5 rounded-xl text-slate-300 hover:text-white text-xs sm:text-sm">
+                        <i class="fa-solid fa-eye"></i>
+                    </button>
+                    <button id="btn-reset" title="Reset & Reshuffle Puzzle" class="bg-indigo-600 hover:bg-indigo-500 text-white font-medium px-3.5 py-2 rounded-xl text-xs sm:text-sm flex items-center gap-1.5 shadow-md shadow-indigo-600/30">
+                        <i class="fa-solid fa-rotate-right"></i>
+                        <span class="hidden sm:inline">Reset</span>
+                    </button>
+                </div>
+
             </div>
         </div>
     </header>
 
-    <!-- Main Game Container -->
-    <main class="max-w-7xl mx-auto w-full px-4 py-6 flex-grow flex flex-col gap-6">
+    <!-- Main Game Arena -->
+    <main class="flex-1 max-w-7xl w-full mx-auto p-3 sm:p-6 flex flex-col gap-4">
         
-        <!-- Controls & Customization Panel -->
-        <div class="glass-panel rounded-2xl p-4 shadow-xl flex flex-wrap items-center justify-between gap-4">
+        <!-- Status Banner Bar -->
+        <div class="w-full glass-panel rounded-2xl p-3 flex flex-wrap items-center justify-between gap-3 text-xs sm:text-sm">
+            <div class="flex items-center gap-4">
+                <div class="flex items-center gap-2">
+                    <i class="fa-regular fa-clock text-indigo-400"></i>
+                    <span class="text-slate-400">Time:</span>
+                    <span id="timer-display" class="font-mono font-bold text-indigo-300 text-base">04:00</span>
+                </div>
+                <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-arrows-spin text-indigo-400"></i>
+                    <span class="text-slate-400">Moves:</span>
+                    <span id="moves-display" class="font-mono font-bold text-slate-200 text-base">0</span>
+                </div>
+            </div>
             
-            <!-- Upload Photo Action & Status -->
-            <div class="flex flex-wrap items-center gap-3 w-full lg:w-auto">
-                <label class="cursor-pointer px-4 py-2 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold text-sm shadow-md shadow-indigo-600/20 flex items-center gap-2 transition active:scale-95">
-                    <i class="fa-solid fa-cloud-arrow-up text-base"></i>
-                    <span>Upload Photo</span>
-                    <input type="file" id="image-upload" accept="image/*" class="hidden">
-                </label>
+            <div class="flex items-center gap-4">
+                <div class="flex items-center gap-2">
+                    <i class="fa-solid fa-bullseye text-emerald-400"></i>
+                    <span class="text-slate-400">Correct Placed:</span>
+                    <span id="placed-display" class="font-mono font-bold text-emerald-400 text-base">0 / 16</span>
+                </div>
+            </div>
+        </div>
+
+        <!-- Content Area: Mobile-First Dual Layout -->
+        <div class="grid grid-cols-1 lg:grid-cols-12 gap-4 flex-1 items-start">
+            
+            <!-- Left Panel: Puzzle Target Board Container -->
+            <div class="lg:col-span-7 flex flex-col items-center justify-center glass-panel rounded-2xl p-3 sm:p-5 relative">
                 
-                <button id="btn-demo-pattern" class="px-3.5 py-2 rounded-xl bg-slate-800 hover:bg-slate-700 text-indigo-300 border border-indigo-500/30 font-semibold text-xs transition flex items-center gap-1.5">
-                    <i class="fa-solid fa-wand-magic-sparkles"></i>
-                    <span>Demo Pattern</span>
-                </button>
-
-                <span id="upload-status-text" class="text-xs font-semibold text-slate-400 italic">
-                    No photo loaded yet
-                </span>
-            </div>
-
-            <!-- Compact Reference Photo Preview Bar -->
-            <div id="corner-reference-box" class="flex items-center gap-2 bg-slate-900/90 px-3 py-1.5 rounded-xl border border-indigo-500/30 shadow-md hidden">
-                <span class="text-xs font-bold uppercase tracking-wider text-slate-400">Reference:</span>
-                <div class="w-10 h-10 rounded-lg overflow-hidden border border-indigo-400/50 bg-slate-950 flex-shrink-0">
-                    <img id="reference-thumbnail" class="w-full h-full object-cover" alt="Reference Photo">
-                </div>
-            </div>
-
-            <div class="flex flex-wrap items-center gap-4 w-full lg:w-auto justify-between lg:justify-end">
-                <!-- Grid Size Difficulty Selector -->
-                <div class="flex items-center gap-2">
-                    <span class="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                        <i class="fa-solid fa-layer-group text-purple-400"></i> Grid:
-                    </span>
-                    <select id="grid-select" class="bg-slate-900 text-slate-200 border border-slate-700 rounded-lg px-3 py-1.5 text-xs font-semibold focus:outline-none focus:border-indigo-500 cursor-pointer">
-                        <option value="3">3 x 3 (Easy - 2m)</option>
-                        <option value="4" selected>4 x 4 (Medium - 4m)</option>
-                        <option value="5">5 x 5 (Hard - 6m)</option>
-                    </select>
+                <!-- Puzzle Board Element -->
+                <div id="puzzle-board" class="w-full max-w-[500px] aspect-square rounded-xl overflow-hidden relative touch-none">
+                    <!-- Dynamic Grid Slots Generated Here -->
                 </div>
 
-                <!-- Timer Mode Toggle -->
-                <div class="flex items-center gap-2">
-                    <span class="text-xs font-bold uppercase tracking-wider text-slate-400 flex items-center gap-1.5">
-                        <i class="fa-solid fa-stopwatch text-amber-400"></i> Mode:
-                    </span>
-                    <select id="timer-mode-select" class="bg-slate-900 text-slate-200 border border-slate-700 rounded-lg px-3 py-1.5 text-xs font-semibold focus:outline-none focus:border-indigo-500 cursor-pointer">
-                        <option value="countdown" selected>Countdown</option>
-                        <option value="stopwatch">Zen (Untimed)</option>
-                    </select>
-                </div>
-            </div>
-        </div>
-
-        <!-- Main Workspace Grid: Board + Side Reference & Tray -->
-        <div class="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start flex-grow">
-            
-            <!-- Target Puzzle Board -->
-            <div class="lg:col-span-7 flex flex-col items-center justify-center">
-                <div class="relative w-full max-w-[500px] aspect-square rounded-2xl p-2 bg-slate-900 border-2 border-slate-800 shadow-2xl overflow-hidden flex items-center justify-center">
-                    
-                    <!-- Preview Image Overlay -->
-                    <div id="board-preview" class="absolute inset-2 rounded-xl bg-cover bg-center pointer-events-none opacity-0 transition-opacity duration-300 z-0"></div>
-
-                    <!-- Initial Placeholder Prompt -->
-                    <div id="placeholder-prompt" class="absolute inset-0 z-20 flex flex-col items-center justify-center p-6 text-center bg-slate-900/95 rounded-xl border-2 border-dashed border-slate-800">
-                        <div class="w-16 h-16 rounded-2xl bg-indigo-500/10 border border-indigo-500/20 flex items-center justify-center text-indigo-400 mb-3 animate-pulse">
-                            <i class="fa-solid fa-image text-3xl"></i>
-                        </div>
-                        <h3 class="text-lg font-bold text-slate-200 mb-1">Upload a Photo to Play</h3>
-                        <p class="text-xs text-slate-400 max-w-xs mb-4">Choose any picture from your device or load a demo pattern puzzle!</p>
-                        
-                        <div class="flex items-center gap-3">
-                            <label class="cursor-pointer px-4 py-2 rounded-lg bg-indigo-600 hover:bg-indigo-500 text-white text-xs font-semibold transition shadow-md shadow-indigo-600/30">
-                                Select File
-                                <input type="file" id="image-upload-prompt" accept="image/*" class="hidden">
-                            </label>
-                            <button id="btn-demo-prompt" class="px-4 py-2 rounded-lg bg-slate-800 hover:bg-slate-700 text-indigo-300 border border-slate-700 text-xs font-semibold transition">
-                                Load Demo
-                            </button>
-                        </div>
-                    </div>
-
-                    <!-- Dynamic Grid Slot Container -->
-                    <div id="puzzle-board" class="relative z-10 w-full h-full grid gap-1 rounded-xl">
-                        <!-- Slots programmatically injected -->
-                    </div>
-                </div>
-                <p class="text-xs text-slate-400 mt-2 flex items-center gap-1.5">
+                <!-- Guidance Info Tag -->
+                <p class="text-[11px] text-slate-400 text-center mt-3 flex items-center justify-center gap-1.5">
                     <i class="fa-solid fa-circle-info text-indigo-400"></i>
-                    Drag pieces from the tray and snap them into their matching grid slots.
+                    <span>Drag pieces to grid slots. You can swap pieces between grid slots freely!</span>
                 </p>
-            </div>
 
-            <!-- Piece Storage Tray -->
-            <div class="lg:col-span-5 flex flex-col gap-4 h-full">
-                <!-- Unplaced Pieces Tray -->
-                <div class="glass-panel rounded-2xl p-4 flex flex-col flex-grow min-h-[380px] lg:min-h-[480px] max-h-[520px]">
-                    <div class="flex items-center justify-between pb-3 border-b border-slate-800 mb-3">
-                        <h2 class="text-sm font-bold uppercase tracking-wider text-slate-300 flex items-center gap-2">
-                            <i class="fa-solid fa-shapes text-indigo-400"></i> Unplaced Pieces
-                        </h2>
-                        <button id="btn-shuffle" class="text-xs font-semibold text-indigo-400 hover:text-indigo-300 flex items-center gap-1 transition">
-                            <i class="fa-solid fa-shuffle"></i> Reshuffle
-                        </button>
-                    </div>
-
-                    <!-- Scrollable Tray Area -->
-                    <div id="pieces-tray" class="flex-grow overflow-y-auto p-2 border border-dashed border-slate-800 rounded-xl bg-slate-950/50 flex flex-wrap gap-3 items-center justify-center align-content-start">
-                        <!-- Shuffled unplaced pieces injected here -->
-                    </div>
+                <!-- Full Image Peek Overlay -->
+                <div id="peek-overlay" class="absolute inset-0 bg-slate-950/90 rounded-2xl p-4 flex flex-col items-center justify-center opacity-0 pointer-events-none transition-opacity duration-200 z-30">
+                    <img id="peek-image" src="" alt="Original Photo" class="max-w-full max-h-[90%] object-contain rounded-lg border border-indigo-500/40">
+                    <span class="text-xs text-indigo-300 mt-2 font-medium">Releasing preview button...</span>
                 </div>
+
             </div>
+
+            <!-- Right Panel: Unplaced Pieces Tray -->
+            <div class="lg:col-span-5 flex flex-col glass-panel rounded-2xl p-3 sm:p-5 min-h-[350px] lg:min-h-[520px]">
+                
+                <!-- Tray Header -->
+                <div class="flex items-center justify-between pb-3 border-b border-slate-800 mb-3">
+                    <div class="flex items-center gap-2">
+                        <i class="fa-solid fa-boxes-stacked text-indigo-400"></i>
+                        <h2 class="font-bold text-sm text-slate-200">Piece Tray</h2>
+                    </div>
+                    <button id="btn-shuffle-tray" class="text-xs text-indigo-400 hover:text-indigo-300 font-semibold flex items-center gap-1 transition-colors">
+                        <i class="fa-solid fa-shuffle"></i>
+                        <span>Shuffle</span>
+                    </button>
+                </div>
+
+                <!-- Unplaced Pieces Scroll Container -->
+                <div id="pieces-tray" class="grid grid-cols-3 sm:grid-cols-4 gap-2.5 overflow-y-auto max-h-[420px] p-1 custom-scrollbar flex-1 align-content-start touch-none">
+                    <!-- Dynamic Tray Piece Cards Inserted Here -->
+                </div>
+
+            </div>
+
         </div>
+
     </main>
 
     <!-- Footer -->
-    <footer class="w-full py-3 border-t border-slate-900 text-center text-xs text-slate-400">
-        <p>© 2026 PuzzleCraft Jigsaw Game — Canvas Image Slicing Engine</p>
+    <footer class="w-full border-t border-slate-900 py-3 text-center text-xs text-slate-500">
+        <p>PuzzleCraft Jigsaw Engine &copy; 2026 — Responsive Touch & Desktop Gameplay</p>
     </footer>
 
-    <!-- Game Over / Time Expired Modal -->
-    <div id="gameover-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4 opacity-0 pointer-events-none transition-opacity duration-300">
-        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8 max-w-md w-full shadow-2xl text-center transform scale-95 transition-transform duration-300" id="gameover-card">
-            <div class="w-16 h-16 rounded-full bg-gradient-to-tr from-rose-600 to-red-500 flex items-center justify-center mx-auto mb-4 shadow-lg shadow-rose-500/30">
-                <i class="fa-solid fa-hourglass-end text-2xl text-white"></i>
+    <!-- Victory Modal Screen -->
+    <div id="victory-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 opacity-0 pointer-events-none transition-opacity duration-300 z-50">
+        <div class="glass-panel max-w-md w-full rounded-2xl p-6 text-center shadow-2xl border border-indigo-500/30 transform scale-95 transition-transform duration-300" id="modal-card">
+            <div class="w-16 h-16 bg-gradient-to-tr from-emerald-500 to-teal-400 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-emerald-500/30 pulse-glow">
+                <i class="fa-solid fa-trophy text-white text-3xl"></i>
             </div>
+            <h2 class="text-2xl font-extrabold text-white mb-1">Puzzle Solved!</h2>
+            <p class="text-slate-300 text-xs sm:text-sm mb-6">Fantastic job! You've successfully assembled all pieces.</p>
             
-            <h2 class="text-2xl font-black text-white mb-1">Time's Up!</h2>
-            <p class="text-slate-400 text-sm mb-6">You ran out of time before completing the puzzle. Don't give up!</p>
-
-            <div class="flex flex-col gap-2">
-                <button id="btn-try-again" class="w-full py-3 rounded-xl bg-gradient-to-r from-indigo-600 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold shadow-lg shadow-indigo-600/30 transition">
-                    Try Again
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Victory Modal -->
-    <div id="victory-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md z-50 flex items-center justify-center p-4 opacity-0 pointer-events-none transition-opacity duration-300">
-        <div class="bg-slate-900 border border-slate-800 rounded-2xl p-6 sm:p-8 max-w-md w-full shadow-2xl text-center transform scale-95 transition-transform duration-300" id="victory-card">
-            <div class="w-16 h-16 rounded-full bg-gradient-to-tr from-emerald-500 to-teal-400 flex items-center justify-center mx-auto mb-4 shadow-lg shadow-emerald-500/30 animate-bounce">
-                <i class="fa-solid fa-trophy text-2xl text-slate-950"></i>
-            </div>
-            
-            <h2 class="text-2xl font-black text-white mb-1">Puzzle Solved!</h2>
-            <p class="text-slate-400 text-sm mb-6">Fantastic job! You've successfully reconstructed your photo.</p>
-            
-            <div class="grid grid-cols-2 gap-3 mb-6 bg-slate-950/60 p-3 rounded-xl border border-slate-800">
-                <div class="p-2">
-                    <span class="block text-xs font-semibold text-slate-400 uppercase">Total Time</span>
-                    <span id="final-time" class="text-xl font-bold font-mono text-emerald-400">00:00</span>
+            <div class="grid grid-cols-2 gap-3 bg-slate-900/60 p-3 rounded-xl mb-6 border border-slate-800 text-xs">
+                <div>
+                    <span class="text-slate-400 block mb-0.5">Time Spent</span>
+                    <span id="win-time" class="font-mono font-bold text-indigo-300 text-base">00:00</span>
                 </div>
-                <div class="p-2 border-l border-slate-800">
-                    <span class="block text-xs font-semibold text-slate-400 uppercase">Total Moves</span>
-                    <span id="final-moves" class="text-xl font-bold font-mono text-purple-400">0</span>
+                <div>
+                    <span class="text-slate-400 block mb-0.5">Total Moves</span>
+                    <span id="win-moves" class="font-mono font-bold text-emerald-400 text-base">0</span>
                 </div>
             </div>
 
-            <div class="flex flex-col gap-2">
-                <button id="btn-play-again" class="w-full py-3 rounded-xl bg-gradient-to-r from-indigo-600 via-indigo-500 to-purple-600 hover:from-indigo-500 hover:to-purple-500 text-white font-bold shadow-lg shadow-indigo-600/30 transition">
-                    Play Again
-                </button>
-            </div>
+            <button id="btn-play-again" class="w-full bg-gradient-to-r from-indigo-600 to-violet-600 hover:from-indigo-500 hover:to-violet-500 text-white font-bold py-3 rounded-xl text-sm shadow-lg shadow-indigo-600/30 transition-all">
+                Play Again
+            </button>
         </div>
     </div>
 
-    <!-- JavaScript Application Logic -->
+    <!-- Time Expired Game Over Modal Screen -->
+    <div id="gameover-modal" class="fixed inset-0 bg-slate-950/80 backdrop-blur-md flex items-center justify-center p-4 opacity-0 pointer-events-none transition-opacity duration-300 z-50">
+        <div class="glass-panel max-w-md w-full rounded-2xl p-6 text-center shadow-2xl border border-rose-500/30 transform scale-95 transition-transform duration-300">
+            <div class="w-16 h-16 bg-gradient-to-tr from-rose-500 to-red-600 rounded-2xl flex items-center justify-center mx-auto mb-4 shadow-lg shadow-rose-500/30">
+                <i class="fa-solid fa-hourglass-end text-white text-3xl"></i>
+            </div>
+            <h2 class="text-2xl font-extrabold text-white mb-1">Time's Up!</h2>
+            <p class="text-slate-300 text-xs sm:text-sm mb-6">You ran out of time. Don't worry, try again!</p>
+            
+            <button id="btn-retry-gameover" class="w-full bg-gradient-to-r from-rose-600 to-red-600 hover:from-rose-500 hover:to-red-500 text-white font-bold py-3 rounded-xl text-sm shadow-lg shadow-rose-600/30 transition-all">
+                Try Again
+            </button>
+        </div>
+    </div>
+
+    <!-- Canvas Confetti Engine Container -->
+    <canvas id="confetti-canvas" class="fixed inset-0 pointer-events-none z-50"></canvas>
+
+    <!-- Main Game Logic Script -->
     <script>
         /**
-         * Synthesized Web Audio API Sound Engine
+         * Web Audio API Synthesizer Helper
          */
         class SoundEngine {
             constructor() {
                 this.ctx = null;
-                this.enabled = true;
+                this.muted = false;
             }
 
             init() {
                 if (!this.ctx) {
-                    const AudioCtx = window.AudioContext || window.webkitAudioContext;
-                    if (AudioCtx) this.ctx = new AudioCtx();
-                }
-                if (this.ctx && this.ctx.state === 'suspended') {
-                    this.ctx.resume();
+                    const AudioContext = window.AudioContext || window.webkitAudioContext;
+                    this.ctx = new AudioContext();
                 }
             }
 
             playSnap() {
-                if (!this.enabled) return;
+                if (this.muted) return;
                 this.init();
-                if (!this.ctx) return;
-
                 const osc = this.ctx.createOscillator();
                 const gain = this.ctx.createGain();
-
                 osc.type = 'sine';
-                osc.frequency.setValueAtTime(300, this.ctx.currentTime);
-                osc.frequency.exponentialRampToValueAtTime(800, this.ctx.currentTime + 0.08);
-
+                osc.frequency.setValueAtTime(440, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(880, this.ctx.currentTime + 0.08);
                 gain.gain.setValueAtTime(0.3, this.ctx.currentTime);
                 gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.08);
-
                 osc.connect(gain);
                 gain.connect(this.ctx.destination);
-
                 osc.start();
                 osc.stop(this.ctx.currentTime + 0.08);
             }
 
-            playError() {
-                if (!this.enabled) return;
+            playSwap() {
+                if (this.muted) return;
                 this.init();
-                if (!this.ctx) return;
-
                 const osc = this.ctx.createOscillator();
                 const gain = this.ctx.createGain();
-
-                osc.type = 'sawtooth';
-                osc.frequency.setValueAtTime(180, this.ctx.currentTime);
-                osc.frequency.linearRampToValueAtTime(110, this.ctx.currentTime + 0.15);
-
-                gain.gain.setValueAtTime(0.2, this.ctx.currentTime);
-                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.15);
-
+                osc.type = 'triangle';
+                osc.frequency.setValueAtTime(320, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(640, this.ctx.currentTime + 0.1);
+                gain.gain.setValueAtTime(0.25, this.ctx.currentTime);
+                gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.1);
                 osc.connect(gain);
                 gain.connect(this.ctx.destination);
-
                 osc.start();
-                osc.stop(this.ctx.currentTime + 0.15);
+                osc.stop(this.ctx.currentTime + 0.1);
             }
 
             playVictory() {
-                if (!this.enabled) return;
+                if (this.muted) return;
                 this.init();
-                if (!this.ctx) return;
-
-                const notes = [261.63, 329.63, 392.00, 523.25, 659.25, 783.99];
-                notes.forEach((freq, index) => {
+                const notes = [261.63, 329.63, 392.00, 523.25];
+                notes.forEach((freq, idx) => {
                     const osc = this.ctx.createOscillator();
                     const gain = this.ctx.createGain();
-
                     osc.type = 'triangle';
-                    osc.frequency.value = freq;
-
-                    const startTime = this.ctx.currentTime + (index * 0.09);
-                    gain.gain.setValueAtTime(0.25, startTime);
-                    gain.gain.exponentialRampToValueAtTime(0.001, startTime + 0.3);
-
+                    osc.frequency.setValueAtTime(freq, this.ctx.currentTime + idx * 0.12);
+                    gain.gain.setValueAtTime(0.3, this.ctx.currentTime + idx * 0.12);
+                    gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + idx * 0.12 + 0.3);
                     osc.connect(gain);
                     gain.connect(this.ctx.destination);
-
-                    osc.start(startTime);
-                    osc.stop(startTime + 0.3);
+                    osc.start(this.ctx.currentTime + idx * 0.12);
+                    osc.stop(this.ctx.currentTime + idx * 0.12 + 0.3);
                 });
             }
         }
 
         /**
-         * Canvas Confetti Particle Engine
+         * Canvas Confetti Explosion Engine
          */
         class ConfettiEngine {
             constructor(canvasId) {
                 this.canvas = document.getElementById(canvasId);
-                this.ctx = this.canvas ? this.canvas.getContext('2d') : null;
+                this.ctx = this.canvas.getContext('2d');
                 this.particles = [];
-                this.animId = null;
-
-                if (this.canvas) {
-                    this.resize();
-                    window.addEventListener('resize', () => this.resize());
-                }
+                this.active = false;
+                this.resize();
+                window.addEventListener('resize', () => this.resize());
             }
 
             resize() {
-                if (!this.canvas) return;
                 this.canvas.width = window.innerWidth;
                 this.canvas.height = window.innerHeight;
             }
 
             burst() {
-                if (!this.canvas || !this.ctx) return;
                 this.particles = [];
+                this.active = true;
                 const colors = ['#6366f1', '#a855f7', '#ec4899', '#10b981', '#f59e0b', '#3b82f6'];
-
                 for (let i = 0; i < 120; i++) {
                     this.particles.push({
                         x: window.innerWidth / 2,
                         y: window.innerHeight / 2,
-                        vx: (Math.random() - 0.5) * 18,
-                        vy: (Math.random() - 0.7) * 18,
+                        vx: (Math.random() - 0.5) * 16,
+                        vy: (Math.random() - 0.7) * 16,
                         size: Math.random() * 8 + 4,
                         color: colors[Math.floor(Math.random() * colors.length)],
                         rotation: Math.random() * 360,
-                        rotSpeed: (Math.random() - 0.5) * 10,
+                        vRot: (Math.random() - 0.5) * 10,
                         opacity: 1
                     });
                 }
-
-                if (this.animId) cancelAnimationFrame(this.animId);
                 this.animate();
             }
 
             animate() {
-                if (!this.ctx) return;
+                if (!this.active) return;
                 this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
-
-                let activeParticles = 0;
+                let alive = false;
                 this.particles.forEach(p => {
-                    if (p.opacity <= 0) return;
-                    activeParticles++;
-
                     p.x += p.vx;
                     p.y += p.vy;
-                    p.vy += 0.35; // gravity
-                    p.rotation += p.rotSpeed;
+                    p.vy += 0.3; // gravity
+                    p.rotation += p.vRot;
                     p.opacity -= 0.008;
 
-                    this.ctx.save();
-                    this.ctx.translate(p.x, p.y);
-                    this.ctx.rotate((p.rotation * Math.PI) / 180);
-                    this.ctx.globalAlpha = Math.max(0, p.opacity);
-                    this.ctx.fillStyle = p.color;
-                    this.ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
-                    this.ctx.restore();
+                    if (p.opacity > 0) {
+                        alive = true;
+                        this.ctx.save();
+                        this.ctx.translate(p.x, p.y);
+                        this.ctx.rotate((p.rotation * Math.PI) / 180);
+                        this.ctx.globalAlpha = Math.max(0, p.opacity);
+                        this.ctx.fillStyle = p.color;
+                        this.ctx.fillRect(-p.size / 2, -p.size / 2, p.size, p.size);
+                        this.ctx.restore();
+                    }
                 });
 
-                if (activeParticles > 0) {
-                    this.animId = requestAnimationFrame(() => this.animate());
+                if (alive) {
+                    requestAnimationFrame(() => this.animate());
                 } else {
+                    this.active = false;
                     this.ctx.clearRect(0, 0, this.canvas.width, this.canvas.height);
                 }
             }
         }
 
         /**
-         * Main Jigsaw Game Application Logic
+         * Main Jigsaw Game Controller
          */
         class JigsawGame {
             constructor() {
+                // Config & State
                 this.gridSize = 4;
-                this.standardCanvasSize = 600;
-                this.masterDataUrl = null;
-                this.masterImageObj = null;
                 this.pieces = [];
-                this.placedCount = 0;
-                this.totalPieces = 16;
+                this.gridSlots = [];
+                this.uploadedImageSrc = null;
                 this.moves = 0;
-                
-                // Timer Properties
-                this.timerMode = 'countdown'; // 'countdown' or 'stopwatch'
-                this.timerSeconds = 240; // Default medium 4 mins
+                this.placedCount = 0;
+                this.secondsLeft = 240;
                 this.timerInterval = null;
-                this.isGameActive = false;
+                this.gameActive = false;
 
-                // Difficulty Time Mapping (in seconds)
-                this.difficultyTimes = {
-                    3: 120,  // 2 minutes for Easy (3x3)
-                    4: 240,  // 4 minutes for Medium (4x4)
-                    5: 360   // 6 minutes for Hard (5x5)
-                };
+                // Drag state
+                this.draggedPieceIndex = null;
+                this.draggedFromSlotIndex = null; // null if from tray
+                this.touchClone = null;
 
+                // Engines
                 this.sound = new SoundEngine();
                 this.confetti = new ConfettiEngine('confetti-canvas');
 
-                // Touch drag handlers
-                this.draggedPiece = null;
-                this.touchClone = null;
-                this.touchOffsetX = 0;
-                this.touchOffsetY = 0;
-
-                // Elements
+                // DOM Bindings
                 this.boardEl = document.getElementById('puzzle-board');
-                this.boardPreviewEl = document.getElementById('board-preview');
-                this.placeholderPrompt = document.getElementById('placeholder-prompt');
                 this.trayEl = document.getElementById('pieces-tray');
                 this.timerEl = document.getElementById('timer-display');
-                this.timerLabelEl = document.getElementById('timer-label');
                 this.movesEl = document.getElementById('moves-display');
-                this.progressEl = document.getElementById('progress-display');
-                this.gridSelect = document.getElementById('grid-select');
-                this.timerModeSelect = document.getElementById('timer-mode-select');
-                this.victoryModal = document.getElementById('victory-modal');
-                this.gameOverModal = document.getElementById('gameover-modal');
-                this.statusTextEl = document.getElementById('upload-status-text');
-                this.referenceImgEl = document.getElementById('reference-thumbnail');
-                this.cornerReferenceBox = document.getElementById('corner-reference-box');
+                this.placedEl = document.getElementById('placed-display');
+                this.gridSelect = document.getElementById('grid-size');
+                this.fileInput = document.getElementById('image-upload');
+                this.referenceBox = document.getElementById('reference-box');
+                this.referenceImg = document.getElementById('reference-img');
+                this.peekImage = document.getElementById('peek-image');
+                this.peekOverlay = document.getElementById('peek-overlay');
 
-                this.bindEvents();
+                this.initEvents();
+                this.generateDefaultPattern();
             }
 
-            bindEvents() {
-                // Grid difficulty change
-                this.gridSelect.addEventListener('change', (e) => {
-                    this.gridSize = parseInt(e.target.value);
-                    if (this.masterImageObj) {
-                        this.initGame();
-                    }
+            initEvents() {
+                // File Upload
+                this.fileInput.addEventListener('change', (e) => this.handleFileUpload(e));
+
+                // Grid Size Change
+                this.gridSelect.addEventListener('change', () => {
+                    this.gridSize = parseInt(this.gridSelect.value, 10);
+                    this.resetTimerForDifficulty();
+                    this.loadPuzzle();
                 });
 
-                // Timer Mode Selection (Countdown vs Zen/Stopwatch)
-                this.timerModeSelect.addEventListener('change', (e) => {
-                    this.timerMode = e.target.value;
-                    if (this.masterImageObj) {
-                        this.initGame();
-                    }
+                // Reset Button
+                document.getElementById('btn-reset').addEventListener('click', () => this.loadPuzzle());
+                document.getElementById('btn-shuffle-tray').addEventListener('click', () => this.shuffleTrayPieces());
+                document.getElementById('btn-play-again').addEventListener('click', () => {
+                    this.hideModals();
+                    this.loadPuzzle();
+                });
+                document.getElementById('btn-retry-gameover').addEventListener('click', () => {
+                    this.hideModals();
+                    this.loadPuzzle();
                 });
 
-                // File Upload Listeners
-                const handleUpload = (file) => {
-                    if (!file) return;
-                    if (!file.type.startsWith('image/')) {
-                        alert('Please select a valid image file.');
-                        return;
-                    }
-                    const reader = new FileReader();
-                    reader.onload = (event) => {
-                        this.processImageSource(event.target.result, file.name);
-                    };
-                    reader.readAsDataURL(file);
-                };
-
-                document.getElementById('image-upload').addEventListener('change', (e) => handleUpload(e.target.files[0]));
-                document.getElementById('image-upload-prompt').addEventListener('change', (e) => handleUpload(e.target.files[0]));
-
-                // Demo Pattern Generators
-                document.getElementById('btn-demo-pattern').addEventListener('click', () => this.generateDemoPattern());
-                document.getElementById('btn-demo-prompt').addEventListener('click', () => this.generateDemoPattern());
-
-                // Control Buttons
-                document.getElementById('btn-restart').addEventListener('click', () => {
-                    if (this.masterImageObj) this.initGame();
-                });
-                document.getElementById('btn-shuffle').addEventListener('click', () => {
-                    if (this.masterImageObj) this.shuffleTrayPieces();
-                });
-                
                 // Sound Toggle
                 document.getElementById('btn-sound').addEventListener('click', () => {
-                    this.sound.enabled = !this.sound.enabled;
-                    const icon = document.getElementById('sound-icon');
-                    icon.className = this.sound.enabled ? 'fa-solid fa-volume-high text-indigo-400' : 'fa-solid fa-volume-xmark text-slate-500';
+                    this.sound.muted = !this.sound.muted;
+                    document.getElementById('sound-icon').className = this.sound.muted ? 
+                        "fa-solid fa-volume-xmark text-rose-400" : "fa-solid fa-volume-high text-slate-300";
                 });
 
-                // Peek preview listener
-                const peekBtn = document.getElementById('btn-peek');
-                const showPeek = () => { if (this.masterDataUrl) this.boardPreviewEl.classList.add('preview-active'); };
-                const hidePeek = () => this.boardPreviewEl.classList.remove('preview-active');
-                
-                peekBtn.addEventListener('mousedown', showPeek);
-                peekBtn.addEventListener('mouseup', hidePeek);
-                peekBtn.addEventListener('mouseleave', hidePeek);
-                peekBtn.addEventListener('touchstart', (e) => { e.preventDefault(); showPeek(); });
-                peekBtn.addEventListener('touchend', hidePeek);
+                // Peek Hold Events
+                const btnPeek = document.getElementById('btn-peek');
+                const showPeek = () => {
+                    if (this.uploadedImageSrc) {
+                        this.peekOverlay.classList.remove('opacity-0', 'pointer-events-none');
+                    }
+                };
+                const hidePeek = () => {
+                    this.peekOverlay.classList.add('opacity-0', 'pointer-events-none');
+                };
 
-                // Try / Play Again
-                document.getElementById('btn-play-again').addEventListener('click', () => {
-                    this.hideVictoryModal();
-                    this.initGame();
-                });
-
-                document.getElementById('btn-try-again').addEventListener('click', () => {
-                    this.hideGameOverModal();
-                    this.initGame();
-                });
+                btnPeek.addEventListener('mousedown', showPeek);
+                btnPeek.addEventListener('mouseup', hidePeek);
+                btnPeek.addEventListener('mouseleave', hidePeek);
+                btnPeek.addEventListener('touchstart', (e) => { e.preventDefault(); showPeek(); });
+                btnPeek.addEventListener('touchend', hidePeek);
             }
 
-            generateDemoPattern() {
+            resetTimerForDifficulty() {
+                // Easy (3x3) -> 2 Mins (120s), Medium (4x4) -> 4 Mins (240s), Hard (5x5) -> 6 Mins (360s)
+                if (this.gridSize === 3) this.secondsLeft = 120;
+                else if (this.gridSize === 4) this.secondsLeft = 240;
+                else if (this.gridSize === 5) this.secondsLeft = 360;
+                this.updateTimerDisplay();
+            }
+
+            startTimer() {
+                clearInterval(this.timerInterval);
+                this.timerInterval = setInterval(() => {
+                    if (!this.gameActive) return;
+                    this.secondsLeft--;
+                    this.updateTimerDisplay();
+                    if (this.secondsLeft <= 0) {
+                        this.triggerGameOver();
+                    }
+                }, 1000);
+            }
+
+            updateTimerDisplay() {
+                const mins = Math.floor(Math.max(0, this.secondsLeft) / 60);
+                const secs = Math.max(0, this.secondsLeft) % 60;
+                this.timerEl.textContent = `${String(mins).padStart(2, '0')}:${String(secs).padStart(2, '0')}`;
+            }
+
+            generateDefaultPattern() {
                 const canvas = document.createElement('canvas');
-                canvas.width = this.standardCanvasSize;
-                canvas.height = this.standardCanvasSize;
+                canvas.width = 600;
+                canvas.height = 600;
                 const ctx = canvas.getContext('2d');
 
-                // Rich gradient background
-                const grad = ctx.createLinearGradient(0, 0, this.standardCanvasSize, this.standardCanvasSize);
-                grad.addColorStop(0, '#3b82f6');
-                grad.addColorStop(0.5, '#8b5cf6');
-                grad.addColorStop(1, '#ec4899');
+                // Dynamic Geometric Canvas Pattern
+                const grad = ctx.createLinearGradient(0, 0, 600, 600);
+                grad.addColorStop(0, '#4f46e5');
+                grad.addColorStop(0.5, '#7c3aed');
+                grad.addColorStop(1, '#db2777');
                 ctx.fillStyle = grad;
-                ctx.fillRect(0, 0, this.standardCanvasSize, this.standardCanvasSize);
+                ctx.fillRect(0, 0, 600, 600);
 
-                // Draw geometric pattern
-                ctx.fillStyle = 'rgba(255, 255, 255, 0.15)';
-                for (let i = 0; i < 6; i++) {
+                ctx.strokeStyle = 'rgba(255, 255, 255, 0.15)';
+                ctx.lineWidth = 10;
+                for (let i = 0; i < 600; i += 40) {
                     ctx.beginPath();
-                    ctx.arc(
-                        this.standardCanvasSize / 2 + Math.cos(i) * 120,
-                        this.standardCanvasSize / 2 + Math.sin(i) * 120,
-                        80 + i * 15,
-                        0,
-                        Math.PI * 2
-                    );
-                    ctx.fill();
+                    ctx.moveTo(i, 0);
+                    ctx.lineTo(600, 600 - i);
+                    ctx.stroke();
                 }
 
-                // Central starburst motif
                 ctx.fillStyle = '#ffffff';
-                ctx.font = '900 64px "Plus Jakarta Sans", sans-serif';
+                ctx.font = 'bold 36px sans-serif';
                 ctx.textAlign = 'center';
-                ctx.textBaseline = 'middle';
-                ctx.fillText('PUZZLE', this.standardCanvasSize / 2, this.standardCanvasSize / 2 - 35);
-                ctx.fillText('CRAFT', this.standardCanvasSize / 2, this.standardCanvasSize / 2 + 45);
+                ctx.fillText('UPLOAD YOUR PHOTO', 300, 300);
 
-                this.processImageSource(canvas.toDataURL('image/png'), 'Demo Pattern');
+                this.setSourceImage(canvas.toDataURL());
             }
 
-            processImageSource(src, titleName) {
+            handleFileUpload(e) {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                const reader = new FileReader();
+                reader.onload = (event) => {
+                    this.setSourceImage(event.target.result);
+                };
+                reader.readAsDataURL(file);
+            }
+
+            setSourceImage(srcUrl) {
+                this.uploadedImageSrc = srcUrl;
+                this.referenceImg.src = srcUrl;
+                this.peekImage.src = srcUrl;
+                this.referenceBox.classList.remove('hidden');
+                this.resetTimerForDifficulty();
+                this.loadPuzzle();
+            }
+
+            loadPuzzle() {
+                if (!this.uploadedImageSrc) return;
+
                 const img = new Image();
-                img.crossOrigin = 'anonymous';
-                
                 img.onload = () => {
-                    const canvas = document.createElement('canvas');
-                    canvas.width = this.standardCanvasSize;
-                    canvas.height = this.standardCanvasSize;
-                    const ctx = canvas.getContext('2d');
-
-                    ctx.drawImage(img, 0, 0, this.standardCanvasSize, this.standardCanvasSize);
-                    this.masterDataUrl = canvas.toDataURL('image/png');
-                    
-                    const masterImg = new Image();
-                    masterImg.onload = () => {
-                        this.masterImageObj = masterImg;
-                        this.statusTextEl.textContent = `Loaded: ${titleName.length > 16 ? titleName.substring(0, 14) + '...' : titleName}`;
-                        this.statusTextEl.className = 'text-xs font-semibold text-emerald-400 truncate max-w-[150px]';
-                        
-                        // Update Small Floating Corner Thumbnail
-                        this.referenceImgEl.src = this.masterDataUrl;
-                        if (this.cornerReferenceBox) {
-                            this.cornerReferenceBox.classList.remove('hidden');
-                        }
-
-                        this.initGame();
-                    };
-                    masterImg.src = this.masterDataUrl;
+                    this.sliceImage(img);
+                    this.resetGameCounters();
+                    this.renderBoard();
+                    this.renderTray();
+                    this.gameActive = true;
+                    this.startTimer();
                 };
-
-                img.onerror = () => {
-                    alert('Error loading image. Using fallback demo pattern.');
-                    this.generateDemoPattern();
-                };
-
-                img.src = src;
+                img.src = this.uploadedImageSrc;
             }
 
-            initGame() {
-                if (!this.masterImageObj) return;
+            sliceImage(img) {
+                this.pieces = [];
+                const total = this.gridSize * this.gridSize;
 
-                this.totalPieces = this.gridSize * this.gridSize;
-                this.placedCount = 0;
+                // Offscreen Master Canvas
+                const masterCanvas = document.createElement('canvas');
+                masterCanvas.width = 600;
+                masterCanvas.height = 600;
+                const mCtx = masterCanvas.getContext('2d');
+                mCtx.drawImage(img, 0, 0, 600, 600);
+
+                const pieceSize = 600 / this.gridSize;
+
+                for (let i = 0; i < total; i++) {
+                    const row = Math.floor(i / this.gridSize);
+                    const col = i % this.gridSize;
+
+                    const pCanvas = document.createElement('canvas');
+                    pCanvas.width = pieceSize;
+                    pCanvas.height = pieceSize;
+                    const pCtx = pCanvas.getContext('2d');
+
+                    pCtx.drawImage(
+                        masterCanvas,
+                        col * pieceSize, row * pieceSize, pieceSize, pieceSize,
+                        0, 0, pieceSize, pieceSize
+                    );
+
+                    this.pieces.push({
+                        id: i,
+                        correctIndex: i,
+                        dataUrl: pCanvas.toDataURL(),
+                        currentSlot: null // null if in tray, index if on board
+                    });
+                }
+            }
+
+            resetGameCounters() {
                 this.moves = 0;
-                this.isGameActive = true;
-
+                this.placedCount = 0;
                 this.movesEl.textContent = '0';
-                this.progressEl.textContent = `0/${this.totalPieces}`;
-
-                this.placeholderPrompt.classList.add('hidden');
-                this.boardPreviewEl.style.backgroundImage = `url(${this.masterDataUrl})`;
-
-                this.renderBoardSlots();
-                this.sliceImageAndCreatePieces();
-                this.startTimer();
+                this.placedEl.textContent = `0 / ${this.gridSize * this.gridSize}`;
+                this.gridSlots = new Array(this.gridSize * this.gridSize).fill(null);
             }
 
-            renderBoardSlots() {
+            renderBoard() {
                 this.boardEl.innerHTML = '';
-                this.boardEl.style.gridTemplateColumns = `repeat(${this.gridSize}, minmax(0, 1fr))`;
-                this.boardEl.style.gridTemplateRows = `repeat(${this.gridSize}, minmax(0, 1fr))`;
+                this.boardEl.style.gridTemplateColumns = `repeat(${this.gridSize}, 1fr)`;
+                this.boardEl.style.gridTemplateRows = `repeat(${this.gridSize}, 1fr)`;
 
-                for (let index = 0; index < this.totalPieces; index++) {
+                for (let i = 0; i < this.gridSize * this.gridSize; i++) {
                     const slot = document.createElement('div');
-                    slot.className = 'puzzle-slot w-full h-full rounded-lg bg-slate-950/70 border border-slate-800/80 flex items-center justify-center relative overflow-hidden';
-                    slot.dataset.index = index;
+                    slot.className = 'grid-slot';
+                    slot.dataset.slotIndex = i;
 
-                    // Standard Drag Events for desktop
-                    slot.addEventListener('dragover', (e) => {
-                        e.preventDefault();
-                        slot.classList.add('highlight');
-                    });
-                    slot.addEventListener('dragleave', () => slot.classList.remove('highlight'));
-                    slot.addEventListener('drop', (e) => {
-                        e.preventDefault();
-                        slot.classList.remove('highlight');
-                        const pieceId = e.dataTransfer.getData('text/plain');
-                        const pieceEl = document.getElementById(pieceId);
-                        if (pieceEl) this.attemptPlacePiece(pieceEl, slot);
-                    });
+                    // Desktop Drag & Drop Handlers
+                    slot.addEventListener('dragover', (e) => this.handleDragOver(e, i));
+                    slot.addEventListener('dragleave', (e) => this.handleDragLeave(e, i));
+                    slot.addEventListener('drop', (e) => this.handleDrop(e, i));
 
                     this.boardEl.appendChild(slot);
                 }
             }
 
-            sliceImageAndCreatePieces() {
-                this.pieces = [];
+            renderTray() {
                 this.trayEl.innerHTML = '';
+                // Get pieces currently not placed on board
+                const unplacedPieces = this.pieces.filter(p => p.currentSlot === null);
+                
+                // Shuffle array order
+                const shuffled = [...unplacedPieces].sort(() => Math.random() - 0.5);
 
-                const pieceSize = this.standardCanvasSize / this.gridSize;
-                const sliceCanvas = document.createElement('canvas');
-                sliceCanvas.width = pieceSize;
-                sliceCanvas.height = pieceSize;
-                const sliceCtx = sliceCanvas.getContext('2d');
+                shuffled.forEach(piece => {
+                    const card = this.createPieceElement(piece, false);
+                    this.trayEl.appendChild(card);
+                });
+            }
 
-                for (let row = 0; row < this.gridSize; row++) {
-                    for (let col = 0; col < this.gridSize; col++) {
-                        const index = row * this.gridSize + col;
-                        sliceCtx.clearRect(0, 0, pieceSize, pieceSize);
-                        
-                        sliceCtx.drawImage(
-                            this.masterImageObj,
-                            col * pieceSize, row * pieceSize, pieceSize, pieceSize,
-                            0, 0, pieceSize, pieceSize
-                        );
+            createPieceElement(piece, isOnBoard) {
+                const container = document.createElement('div');
+                container.className = isOnBoard ? 'w-full h-full relative cursor-grab' : 'tray-piece-card';
+                container.dataset.pieceId = piece.id;
 
-                        const pieceDataUrl = sliceCanvas.toDataURL('image/png');
-                        const pieceEl = document.createElement('div');
-                        pieceEl.id = `piece-${index}`;
-                        pieceEl.className = 'puzzle-piece rounded-lg overflow-hidden border border-slate-700/60 bg-slate-900 select-none';
-                        pieceEl.style.width = `calc(100% / ${this.gridSize} - 8px)`;
-                        pieceEl.style.aspectRatio = '1 / 1';
-                        pieceEl.style.maxWidth = '100px';
-                        pieceEl.draggable = true;
+                const img = document.createElement('img');
+                img.src = piece.dataUrl;
+                img.className = 'puzzle-piece';
+                img.draggable = true;
 
-                        pieceEl.dataset.correctIndex = index;
-                        pieceEl.dataset.isPlaced = 'false';
+                // Bind Desktop Drag
+                img.addEventListener('dragstart', (e) => this.handleDragStart(e, piece.id));
 
-                        const img = document.createElement('img');
-                        img.src = pieceDataUrl;
-                        img.className = 'w-full h-full object-cover pointer-events-none';
-                        pieceEl.appendChild(img);
+                // Bind Touch Events for Mobile
+                img.addEventListener('touchstart', (e) => this.handleTouchStart(e, piece.id), { passive: false });
+                img.addEventListener('touchmove', (e) => this.handleTouchMove(e), { passive: false });
+                img.addEventListener('touchend', (e) => this.handleTouchEnd(e), { passive: false });
 
-                        // Desktop Drag Events
-                        pieceEl.addEventListener('dragstart', (e) => {
-                            e.dataTransfer.setData('text/plain', pieceEl.id);
-                            pieceEl.classList.add('opacity-50', 'dragging');
-                        });
-
-                        pieceEl.addEventListener('dragend', () => {
-                            pieceEl.classList.remove('opacity-50', 'dragging');
-                        });
-
-                        // Mobile Touch Events
-                        this.attachTouchEvents(pieceEl);
-
-                        this.pieces.push(pieceEl);
-                    }
-                }
-
-                this.shuffleTrayPieces();
+                container.appendChild(img);
+                return container;
             }
 
             shuffleTrayPieces() {
-                const unplaced = this.pieces.filter(p => p.dataset.isPlaced === 'false');
-                for (let i = unplaced.length - 1; i > 0; i--) {
-                    const j = Math.floor(Math.random() * (i + 1));
-                    [unplaced[i], unplaced[j]] = [unplaced[j], unplaced[i]];
+                this.renderTray();
+                this.sound.playSwap();
+            }
+
+            // Desktop Drag & Drop Logic
+            handleDragStart(e, pieceId) {
+                const piece = this.pieces.find(p => p.id === pieceId);
+                this.draggedPieceIndex = pieceId;
+                this.draggedFromSlotIndex = piece.currentSlot;
+                e.dataTransfer.setData('text/plain', pieceId);
+            }
+
+            handleDragOver(e, slotIndex) {
+                e.preventDefault();
+                const slot = this.boardEl.children[slotIndex];
+                slot.classList.add('drag-over');
+            }
+
+            handleDragLeave(e, slotIndex) {
+                const slot = this.boardEl.children[slotIndex];
+                slot.classList.remove('drag-over');
+            }
+
+            handleDrop(e, targetSlotIndex) {
+                e.preventDefault();
+                const slot = this.boardEl.children[targetSlotIndex];
+                slot.classList.remove('drag-over');
+
+                if (this.draggedPieceIndex !== null) {
+                    this.executeMove(this.draggedPieceIndex, targetSlotIndex);
+                }
+            }
+
+            // Mobile Touch Handling Logic
+            handleTouchStart(e, pieceId) {
+                e.preventDefault();
+                const touch = e.touches[0];
+                const piece = this.pieces.find(p => p.id === pieceId);
+                
+                this.draggedPieceIndex = pieceId;
+                this.draggedFromSlotIndex = piece.currentSlot;
+
+                // Create Floating Touch Clone
+                this.touchClone = document.createElement('img');
+                this.touchClone.src = piece.dataUrl;
+                this.touchClone.className = 'drag-clone w-20 h-20 object-cover';
+                this.touchClone.style.left = `${touch.clientX}px`;
+                this.touchClone.style.top = `${touch.clientY}px`;
+                document.body.appendChild(this.touchClone);
+            }
+
+            handleTouchMove(e) {
+                e.preventDefault();
+                if (!this.touchClone) return;
+                const touch = e.touches[0];
+                this.touchClone.style.left = `${touch.clientX}px`;
+                this.touchClone.style.top = `${touch.clientY}px`;
+
+                // Highlight slot under touch point
+                const targetEl = document.elementFromPoint(touch.clientX, touch.clientY);
+                const slotEl = targetEl ? targetEl.closest('.grid-slot') : null;
+
+                Array.from(this.boardEl.children).forEach(s => s.classList.remove('drag-over'));
+                if (slotEl) {
+                    slotEl.classList.add('drag-over');
+                }
+            }
+
+            handleTouchEnd(e) {
+                e.preventDefault();
+                if (!this.touchClone) return;
+
+                const touch = e.changedTouches[0];
+                const targetEl = document.elementFromPoint(touch.clientX, touch.clientY);
+                const slotEl = targetEl ? targetEl.closest('.grid-slot') : null;
+
+                // Remove Clone
+                this.touchClone.remove();
+                this.touchClone = null;
+                Array.from(this.boardEl.children).forEach(s => s.classList.remove('drag-over'));
+
+                if (slotEl) {
+                    const targetSlotIndex = parseInt(slotEl.dataset.slotIndex, 10);
+                    this.executeMove(this.draggedPieceIndex, targetSlotIndex);
                 }
 
-                this.trayEl.innerHTML = '';
-                unplaced.forEach(piece => {
-                    piece.style.width = `calc(100% / ${this.gridSize} - 8px)`;
-                    piece.style.height = '';
-                    piece.style.maxWidth = '100px';
-                    piece.classList.add('puzzle-piece', 'border-slate-700/60');
-                    piece.classList.remove('snap-anim', 'border-0');
-                    this.trayEl.appendChild(piece);
-                });
+                this.draggedPieceIndex = null;
+                this.draggedFromSlotIndex = null;
             }
 
-            attachTouchEvents(pieceEl) {
-                pieceEl.addEventListener('touchstart', (e) => {
-                    if (!this.isGameActive) return;
-                    const touch = e.touches[0];
-                    this.draggedPiece = pieceEl;
+            // Core Piece Move & Grid Swapping Logic
+            executeMove(pieceId, targetSlotIndex) {
+                const movingPiece = this.pieces.find(p => p.id === pieceId);
+                const existingPieceInTarget = this.pieces.find(p => p.currentSlot === targetSlotIndex);
 
-                    const rect = pieceEl.getBoundingClientRect();
-                    this.touchOffsetX = touch.clientX - rect.left;
-                    this.touchOffsetY = touch.clientY - rect.top;
+                const originSlotIndex = movingPiece.currentSlot;
 
-                    // Create floating drag clone for mobile
-                    this.touchClone = pieceEl.cloneNode(true);
-                    this.touchClone.style.position = 'fixed';
-                    this.touchClone.style.width = `${rect.width}px`;
-                    this.touchClone.style.height = `${rect.height}px`;
-                    this.touchClone.style.left = `${touch.clientX - this.touchOffsetX}px`;
-                    this.touchClone.style.top = `${touch.clientY - this.touchOffsetY}px`;
-                    this.touchClone.style.zIndex = '1000';
-                    this.touchClone.style.pointerEvents = 'none';
-                    this.touchClone.style.opacity = '0.85';
-                    this.touchClone.classList.add('shadow-2xl');
-
-                    document.body.appendChild(this.touchClone);
-                    pieceEl.classList.add('opacity-30');
-                });
-
-                pieceEl.addEventListener('touchmove', (e) => {
-                    if (!this.touchClone) return;
-                    if (e.cancelable) e.preventDefault();
-                    
-                    const touch = e.touches[0];
-                    this.touchClone.style.left = `${touch.clientX - this.touchOffsetX}px`;
-                    this.touchClone.style.top = `${touch.clientY - this.touchOffsetY}px`;
-
-                    const targetEl = document.elementFromPoint(touch.clientX, touch.clientY);
-                    const slot = targetEl ? targetEl.closest('.puzzle-slot') : null;
-                    document.querySelectorAll('.puzzle-slot').forEach(s => s.classList.remove('highlight'));
-                    if (slot) {
-                        slot.classList.add('highlight');
+                // Case 1: Swapping with an occupied grid slot
+                if (existingPieceInTarget) {
+                    if (originSlotIndex !== null) {
+                        // Moving from Grid Slot A to Grid Slot B (Swap both)
+                        existingPieceInTarget.currentSlot = originSlotIndex;
+                        movingPiece.currentSlot = targetSlotIndex;
+                    } else {
+                        // Moving from Tray to Occupied Grid Slot (Existing returns to tray)
+                        existingPieceInTarget.currentSlot = null;
+                        movingPiece.currentSlot = targetSlotIndex;
                     }
-                }, { passive: false });
-
-                const handleTouchEnd = (e) => {
-                    if (!this.touchClone) return;
-                    
-                    const touch = e.changedTouches ? e.changedTouches[0] : null;
-                    let slot = null;
-                    
-                    if (touch) {
-                        const targetEl = document.elementFromPoint(touch.clientX, touch.clientY);
-                        slot = targetEl ? targetEl.closest('.puzzle-slot') : null;
-                    }
-
-                    document.querySelectorAll('.puzzle-slot').forEach(s => s.classList.remove('highlight'));
-                    
-                    if (this.touchClone) {
-                        this.touchClone.remove();
-                        this.touchClone = null;
-                    }
-                    pieceEl.classList.remove('opacity-30');
-
-                    if (slot) {
-                        this.attemptPlacePiece(pieceEl, slot);
-                    }
-                };
-
-                pieceEl.addEventListener('touchend', handleTouchEnd);
-                pieceEl.addEventListener('touchcancel', handleTouchEnd);
-            }
-
-            attemptPlacePiece(pieceEl, slotEl) {
-                if (!this.isGameActive) return;
-
-                const originParent = pieceEl.parentElement;
-                const existingPiece = slotEl.children[0];
-
-                // If moving into the same slot, do nothing
-                if (originParent === slotEl) return;
+                    this.sound.playSwap();
+                } else {
+                    // Case 2: Moving into an empty grid slot
+                    movingPiece.currentSlot = targetSlotIndex;
+                    this.sound.playSnap();
+                }
 
                 this.moves++;
                 this.movesEl.textContent = this.moves;
 
-                // Handle Swapping or Moving within the Board Grid / Tray
-                if (existingPiece) {
-                    // If slot is occupied, swap pieces
-                    if (originParent && originParent.classList.contains('puzzle-slot')) {
-                        originParent.appendChild(existingPiece);
-                    } else {
-                        // Move evicted piece back to tray
-                        existingPiece.dataset.isPlaced = 'false';
-                        existingPiece.style.width = `calc(100% / ${this.gridSize} - 8px)`;
-                        existingPiece.style.height = '';
-                        existingPiece.style.maxWidth = '100px';
-                        existingPiece.classList.add('puzzle-piece', 'border-slate-700/60');
-                        existingPiece.classList.remove('snap-anim', 'border-0');
-                        this.trayEl.appendChild(existingPiece);
+                this.updateBoardAndTrayDOM();
+                this.checkCompletion();
+            }
+
+            updateBoardAndTrayDOM() {
+                // Clear and rebuild board slots
+                for (let i = 0; i < this.gridSize * this.gridSize; i++) {
+                    const slot = this.boardEl.children[i];
+                    slot.innerHTML = '';
+                    const pieceInSlot = this.pieces.find(p => p.currentSlot === i);
+                    if (pieceInSlot) {
+                        const pieceEl = this.createPieceElement(pieceInSlot, true);
+                        slot.appendChild(pieceEl);
                     }
                 }
 
-                // Place piece in target slot (regardless of whether it's correct)
-                pieceEl.dataset.isPlaced = 'true';
-                pieceEl.style.width = '100%';
-                pieceEl.style.height = '100%';
-                pieceEl.style.maxWidth = 'none';
-                pieceEl.classList.remove('puzzle-piece', 'cursor-grab', 'border-slate-700/60');
-                pieceEl.classList.add('snap-anim', 'border-0');
-                slotEl.appendChild(pieceEl);
+                // Rebuild unplaced tray
+                this.renderTray();
 
-                this.sound.playSnap();
-
-                // Recalculate placed and correctly positioned piece counts
-                this.checkBoardState();
-            }
-
-            checkBoardState() {
-                const slots = this.boardEl.querySelectorAll('.puzzle-slot');
-                let totalInGrid = 0;
-                let correctInGrid = 0;
-
-                slots.forEach((slot) => {
-                    const piece = slot.children[0];
-                    if (piece) {
-                        totalInGrid++;
-                        const slotIdx = parseInt(slot.dataset.index);
-                        const correctIdx = parseInt(piece.dataset.correctIndex);
-                        if (slotIdx === correctIdx) {
-                            correctInGrid++;
-                        }
-                    }
+                // Update correct placement counters
+                let correct = 0;
+                this.pieces.forEach(p => {
+                    if (p.currentSlot === p.correctIndex) correct++;
                 });
-
-                this.placedCount = correctInGrid;
-                this.progressEl.textContent = `${correctInGrid}/${this.totalPieces}`;
-
-                // Win condition: All grid slots filled AND every piece in correct position
-                if (totalInGrid === this.totalPieces && correctInGrid === this.totalPieces) {
-                    this.handleVictory();
-                }
+                this.placedCount = correct;
+                this.placedEl.textContent = `${correct} / ${this.gridSize * this.gridSize}`;
             }
 
-            startTimer() {
-                this.stopTimer();
-                this.timerEl.classList.remove('text-rose-400', 'animate-pulse');
+            checkCompletion() {
+                const total = this.gridSize * this.gridSize;
+                const isComplete = this.pieces.every(p => p.currentSlot === p.correctIndex);
 
-                if (this.timerMode === 'countdown') {
-                    this.timerSeconds = this.difficultyTimes[this.gridSize] || 300;
-                    this.timerLabelEl.textContent = 'Remaining:';
-                    this.updateTimerDisplay();
-
-                    this.timerInterval = setInterval(() => {
-                        this.timerSeconds--;
-                        this.updateTimerDisplay();
-
-                        if (this.timerSeconds <= 30) {
-                            this.timerEl.classList.add('text-rose-400', 'animate-pulse');
-                        }
-
-                        if (this.timerSeconds <= 0) {
-                            this.handleGameOver();
-                        }
-                    }, 1000);
-                } else {
-                    // Stopwatch / Zen Mode
-                    this.timerSeconds = 0;
-                    this.timerLabelEl.textContent = 'Time:';
-                    this.updateTimerDisplay();
-
-                    this.timerInterval = setInterval(() => {
-                        this.timerSeconds++;
-                        this.updateTimerDisplay();
-                    }, 1000);
-                }
-            }
-
-            updateTimerDisplay() {
-                const mins = String(Math.floor(Math.abs(this.timerSeconds) / 60)).padStart(2, '0');
-                const secs = String(Math.abs(this.timerSeconds) % 60).padStart(2, '0');
-                this.timerEl.textContent = `${mins}:${secs}`;
-            }
-
-            stopTimer() {
-                if (this.timerInterval) {
+                if (isComplete && this.gameActive) {
+                    this.gameActive = false;
                     clearInterval(this.timerInterval);
-                    this.timerInterval = null;
+                    this.sound.playVictory();
+                    this.confetti.burst();
+                    this.showVictoryModal();
                 }
-            }
-
-            handleGameOver() {
-                this.stopTimer();
-                this.isGameActive = false;
-                this.sound.playError();
-                this.showGameOverModal();
-            }
-
-            showGameOverModal() {
-                this.gameOverModal.classList.remove('opacity-0', 'pointer-events-none');
-                document.getElementById('gameover-card').classList.remove('scale-95');
-                document.getElementById('gameover-card').classList.add('scale-100');
-            }
-
-            hideGameOverModal() {
-                this.gameOverModal.classList.add('opacity-0', 'pointer-events-none');
-                document.getElementById('gameover-card').classList.remove('scale-100');
-                document.getElementById('gameover-card').classList.add('scale-95');
-            }
-
-            handleVictory() {
-                this.stopTimer();
-                this.isGameActive = false;
-                this.sound.playVictory();
-                this.confetti.burst();
-
-                document.getElementById('final-time').textContent = this.timerEl.textContent;
-                document.getElementById('final-moves').textContent = this.moves;
-
-                this.showVictoryModal();
             }
 
             showVictoryModal() {
-                this.victoryModal.classList.remove('opacity-0', 'pointer-events-none');
-                document.getElementById('victory-card').classList.remove('scale-95');
-                document.getElementById('victory-card').classList.add('scale-100');
+                document.getElementById('win-time').textContent = this.timerEl.textContent;
+                document.getElementById('win-moves').textContent = this.moves;
+                const modal = document.getElementById('victory-modal');
+                const card = document.getElementById('modal-card');
+                modal.classList.remove('opacity-0', 'pointer-events-none');
+                card.classList.remove('scale-95');
+                card.classList.add('scale-100');
             }
 
-            hideVictoryModal() {
-                this.victoryModal.classList.add('opacity-0', 'pointer-events-none');
-                document.getElementById('victory-card').classList.remove('scale-100');
-                document.getElementById('victory-card').classList.add('scale-95');
+            triggerGameOver() {
+                this.gameActive = false;
+                clearInterval(this.timerInterval);
+                const modal = document.getElementById('gameover-modal');
+                modal.classList.remove('opacity-0', 'pointer-events-none');
+            }
+
+            hideModals() {
+                document.getElementById('victory-modal').classList.add('opacity-0', 'pointer-events-none');
+                document.getElementById('gameover-modal').classList.add('opacity-0', 'pointer-events-none');
             }
         }
 
-        // Initialize application on page load
+        // Initialize Game On Page Load
         window.addEventListener('DOMContentLoaded', () => {
-            const game = new JigsawGame();
-            game.generateDemoPattern();
+            window.gameInstance = new JigsawGame();
         });
     </script>
 </body>
