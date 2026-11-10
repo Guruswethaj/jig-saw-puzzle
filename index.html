@@ -787,10 +787,6 @@
 
                         // Desktop Drag Events
                         pieceEl.addEventListener('dragstart', (e) => {
-                            if (pieceEl.dataset.isPlaced === 'true') {
-                                e.preventDefault();
-                                return;
-                            }
                             e.dataTransfer.setData('text/plain', pieceEl.id);
                             pieceEl.classList.add('opacity-50', 'dragging');
                         });
@@ -817,12 +813,19 @@
                 }
 
                 this.trayEl.innerHTML = '';
-                unplaced.forEach(piece => this.trayEl.appendChild(piece));
+                unplaced.forEach(piece => {
+                    piece.style.width = `calc(100% / ${this.gridSize} - 8px)`;
+                    piece.style.height = '';
+                    piece.style.maxWidth = '100px';
+                    piece.classList.add('puzzle-piece', 'border-slate-700/60');
+                    piece.classList.remove('snap-anim', 'border-0');
+                    this.trayEl.appendChild(piece);
+                });
             }
 
             attachTouchEvents(pieceEl) {
                 pieceEl.addEventListener('touchstart', (e) => {
-                    if (pieceEl.dataset.isPlaced === 'true' || !this.isGameActive) return;
+                    if (!this.isGameActive) return;
                     const touch = e.touches[0];
                     this.draggedPiece = pieceEl;
 
@@ -838,7 +841,7 @@
                     this.touchClone.style.left = `${touch.clientX - this.touchOffsetX}px`;
                     this.touchClone.style.top = `${touch.clientY - this.touchOffsetY}px`;
                     this.touchClone.style.zIndex = '1000';
-                    this.touchClone.style.pointerEvents = 'none'; // Critical to allow elementFromPoint to see slots underneath
+                    this.touchClone.style.pointerEvents = 'none';
                     this.touchClone.style.opacity = '0.85';
                     this.touchClone.classList.add('shadow-2xl');
 
@@ -848,17 +851,16 @@
 
                 pieceEl.addEventListener('touchmove', (e) => {
                     if (!this.touchClone) return;
-                    if (e.cancelable) e.preventDefault(); // Prevent page scrolling during dragging
+                    if (e.cancelable) e.preventDefault();
                     
                     const touch = e.touches[0];
                     this.touchClone.style.left = `${touch.clientX - this.touchOffsetX}px`;
                     this.touchClone.style.top = `${touch.clientY - this.touchOffsetY}px`;
 
-                    // Highlight hovered slot accurately using elementFromPoint
                     const targetEl = document.elementFromPoint(touch.clientX, touch.clientY);
                     const slot = targetEl ? targetEl.closest('.puzzle-slot') : null;
                     document.querySelectorAll('.puzzle-slot').forEach(s => s.classList.remove('highlight'));
-                    if (slot && slot.children.length === 0) {
+                    if (slot) {
                         slot.classList.add('highlight');
                     }
                 }, { passive: false });
@@ -892,41 +894,72 @@
             }
 
             attemptPlacePiece(pieceEl, slotEl) {
-                if (!this.isGameActive || pieceEl.dataset.isPlaced === 'true') return;
-                
-                // If slot already occupied
-                if (slotEl.children.length > 0) {
-                    this.sound.playError();
-                    return;
-                }
+                if (!this.isGameActive) return;
+
+                const originParent = pieceEl.parentElement;
+                const existingPiece = slotEl.children[0];
+
+                // If moving into the same slot, do nothing
+                if (originParent === slotEl) return;
 
                 this.moves++;
                 this.movesEl.textContent = this.moves;
 
-                const correctIndex = parseInt(pieceEl.dataset.correctIndex);
-                const slotIndex = parseInt(slotEl.dataset.index);
-
-                if (correctIndex === slotIndex) {
-                    // Correct Placement
-                    pieceEl.dataset.isPlaced = 'true';
-                    pieceEl.draggable = false;
-                    pieceEl.style.width = '100%';
-                    pieceEl.style.height = '100%';
-                    pieceEl.style.maxWidth = 'none';
-                    pieceEl.classList.remove('puzzle-piece', 'cursor-grab', 'border-slate-700/60');
-                    pieceEl.classList.add('snap-anim', 'border-0');
-
-                    slotEl.appendChild(pieceEl);
-                    this.placedCount++;
-                    this.progressEl.textContent = `${this.placedCount}/${this.totalPieces}`;
-                    this.sound.playSnap();
-
-                    if (this.placedCount === this.totalPieces) {
-                        this.handleVictory();
+                // Handle Swapping or Moving within the Board Grid / Tray
+                if (existingPiece) {
+                    // If slot is occupied, swap pieces
+                    if (originParent && originParent.classList.contains('puzzle-slot')) {
+                        originParent.appendChild(existingPiece);
+                    } else {
+                        // Move evicted piece back to tray
+                        existingPiece.dataset.isPlaced = 'false';
+                        existingPiece.style.width = `calc(100% / ${this.gridSize} - 8px)`;
+                        existingPiece.style.height = '';
+                        existingPiece.style.maxWidth = '100px';
+                        existingPiece.classList.add('puzzle-piece', 'border-slate-700/60');
+                        existingPiece.classList.remove('snap-anim', 'border-0');
+                        this.trayEl.appendChild(existingPiece);
                     }
-                } else {
-                    // Incorrect Placement
-                    this.sound.playError();
+                }
+
+                // Place piece in target slot (regardless of whether it's correct)
+                pieceEl.dataset.isPlaced = 'true';
+                pieceEl.style.width = '100%';
+                pieceEl.style.height = '100%';
+                pieceEl.style.maxWidth = 'none';
+                pieceEl.classList.remove('puzzle-piece', 'cursor-grab', 'border-slate-700/60');
+                pieceEl.classList.add('snap-anim', 'border-0');
+                slotEl.appendChild(pieceEl);
+
+                this.sound.playSnap();
+
+                // Recalculate placed and correctly positioned piece counts
+                this.checkBoardState();
+            }
+
+            checkBoardState() {
+                const slots = this.boardEl.querySelectorAll('.puzzle-slot');
+                let totalInGrid = 0;
+                let correctInGrid = 0;
+
+                slots.forEach((slot) => {
+                    const piece = slot.children[0];
+                    if (piece) {
+                        totalInGrid++;
+                        const slotIdx = parseInt(slot.dataset.index);
+                        const correctIdx = parseInt(piece.dataset.correctIndex);
+                        if (slotIdx === correctIdx) {
+                            correctInGrid++;
+                        }
+                    }
+                });
+
+                this.placedCount = correctInGrid;
+                this.progressEl.textContent = `${correctInGrid}/${this.totalPieces}`;
+
+                // Win condition: All grid slots filled AND every piece in correct position
+                if (totalInGrid === this.totalPieces && correctInGrid === this.totalPieces) {
+                    this.handleVictory();
                 }
             }
 
