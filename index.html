@@ -64,7 +64,7 @@
             cursor: grab;
             user-select: none;
             -webkit-user-select: none;
-            -webkit-user-drag: none;
+            -webkit-user-drag: auto;
             touch-action: none;
             display: block;
             border-radius: 2px;
@@ -730,9 +730,15 @@
                 img.src = piece.dataUrl;
                 img.className = 'puzzle-piece';
                 img.draggable = true;
+                img.setAttribute('draggable', 'true');
 
                 // Bind Desktop Drag
                 img.addEventListener('dragstart', (e) => this.handleDragStart(e, piece.id));
+                img.addEventListener('dragend', () => {
+                    this.draggedPieceIndex = null;
+                    this.draggedFromSlotIndex = null;
+                    Array.from(this.boardEl.children).forEach(slot => slot.classList.remove('drag-over'));
+                });
 
                 // Bind Touch Events for Mobile
                 img.addEventListener('touchstart', (e) => this.handleTouchStart(e, piece.id), { passive: false });
@@ -753,7 +759,8 @@
                 const piece = this.pieces.find(p => p.id === pieceId);
                 this.draggedPieceIndex = pieceId;
                 this.draggedFromSlotIndex = piece.currentSlot;
-                e.dataTransfer.setData('text/plain', pieceId);
+                e.dataTransfer.effectAllowed = 'move';
+                e.dataTransfer.setData('text/plain', String(pieceId));
             }
 
             handleDragOver(e, slotIndex) {
@@ -772,9 +779,14 @@
                 const slot = this.boardEl.children[targetSlotIndex];
                 slot.classList.remove('drag-over');
 
-                if (this.draggedPieceIndex !== null) {
-                    this.executeMove(this.draggedPieceIndex, targetSlotIndex);
+                const transferId = e.dataTransfer ? e.dataTransfer.getData('text/plain') : '';
+                const pieceId = transferId !== '' ? Number(transferId) : this.draggedPieceIndex;
+
+                if (pieceId !== null && Number.isInteger(pieceId)) {
+                    this.executeMove(pieceId, targetSlotIndex);
                 }
+                this.draggedPieceIndex = null;
+                this.draggedFromSlotIndex = null;
             }
 
             // Mobile Touch Handling Logic
